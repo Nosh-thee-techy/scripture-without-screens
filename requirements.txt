@@ -1,0 +1,8 @@
+africastalking
+fastapi
+httpx
+pytest
+python-dotenv
+python-multipart
+requests
+uvicorn[standard]
