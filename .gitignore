@@ -14,3 +14,7 @@ __pycache__/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Generated ElevenLabs audio clips
+app/static/audio/
+!app/static/audio/.gitkeep

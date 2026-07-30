@@ -48,6 +48,33 @@ def build_voice_say_response(message: str) -> str:
     return _serialize_voice_response(root)
 
 
+def build_voice_play_response(audio_url: str, fallback_text: str = "") -> str:
+    """Build XML that plays a hosted audio file, with optional Say fallback.
+
+    Args:
+        audio_url: Public HTTPS URL Africa's Talking can fetch (often ngrok).
+        fallback_text: Optional text spoken if Play is insufficient alone.
+
+    Returns:
+        An escaped Africa's Talking ``Response`` XML document.
+
+    Raises:
+        ValueError: If ``audio_url`` is blank.
+    """
+
+    if not audio_url.strip():
+        raise ValueError("audio_url must not be blank")
+
+    root = Element("Response")
+    play = SubElement(root, "Play")
+    play.text = audio_url.strip()
+    if fallback_text.strip():
+        # Keep a short spoken cue after audio for callers on weak networks.
+        say = SubElement(root, "Say")
+        say.text = " ".join(fallback_text.split())
+    return _serialize_voice_response(root)
+
+
 def build_voice_menu_response(prompt: str) -> str:
     """Build XML that speaks a menu and collects one keypad digit.
 
