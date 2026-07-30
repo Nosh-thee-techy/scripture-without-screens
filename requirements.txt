@@ -4,5 +4,6 @@ httpx
 pytest
 python-dotenv
 python-multipart
+redis
 requests
 uvicorn[standard]
