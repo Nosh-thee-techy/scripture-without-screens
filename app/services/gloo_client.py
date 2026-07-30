@@ -1,4 +1,4 @@
-"""Client for short, personalized reflections from Gloo AI Studio."""
+"""Client for short, personalized reflections (Featherless, then Gloo)."""
 
 from time import monotonic
 from typing import Any
@@ -6,6 +6,10 @@ from typing import Any
 import requests
 
 from app.config import (
+    FEATHERLESS_API_KEY,
+    FEATHERLESS_BASE_URL,
+    FEATHERLESS_MODEL,
+    FEATHERLESS_TIMEOUT_SECONDS,
     GLOO_API_KEY,
     GLOO_BASE_URL,
     GLOO_CLIENT_ID,
@@ -76,7 +80,7 @@ def _build_prompt(
         time_of_day: Optional context such as ``"morning"`` or ``"evening"``.
 
     Returns:
-        A prompt asking Gloo for a brief, accessible reflection.
+        A prompt asking for a brief, accessible reflection.
     """
 
     context_parts = []
@@ -98,10 +102,10 @@ def _build_prompt(
 
 
 def _extract_reflection(payload: dict[str, Any]) -> str:
-    """Extract assistant text from a Gloo Completions V2 response.
+    """Extract assistant text from an OpenAI-style chat completion response.
 
     Args:
-        payload: Decoded JSON returned by Gloo.
+        payload: Decoded JSON returned by Featherless or Gloo.
 
     Returns:
         The assistant's reflection, or an empty string for malformed data.
@@ -137,6 +141,67 @@ def _limit_words(text: str, max_words: int = 99) -> str:
     return f"{' '.join(words[:max_words])}…"
 
 
+def _reflect_with_featherless(prompt: str) -> str:
+    """Request a reflection from Featherless chat completions.
+
+    Args:
+        prompt: Fully formed user prompt.
+
+    Returns:
+        Reflection text, or an empty string when the call fails.
+    """
+
+    if not FEATHERLESS_API_KEY:
+        return ""
+
+    response = requests.post(
+        f"{FEATHERLESS_BASE_URL}/chat/completions",
+        headers={
+            "Authorization": f"Bearer {FEATHERLESS_API_KEY}",
+            "Content-Type": "application/json",
+            "X-Title": "Scripture Without Screens",
+        },
+        json={
+            "model": FEATHERLESS_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.6,
+            "max_tokens": 160,
+        },
+        timeout=FEATHERLESS_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    return _extract_reflection(response.json())
+
+
+def _reflect_with_gloo(prompt: str) -> str:
+    """Request a reflection from Gloo Completions V2.
+
+    Args:
+        prompt: Fully formed user prompt.
+
+    Returns:
+        Reflection text, or an empty string when the call fails.
+    """
+
+    token = _get_access_token()
+    response = requests.post(
+        GLOO_BASE_URL,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "messages": [{"role": "user", "content": prompt}],
+            "auto_routing": True,
+            "temperature": 0.6,
+            "max_tokens": 160,
+        },
+        timeout=GLOO_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    return _extract_reflection(response.json())
+
+
 def generate_reflection(
     verse_text: str,
     mood: str | None = None,
@@ -144,43 +209,24 @@ def generate_reflection(
 ) -> str:
     """Generate a short reflection, falling back to the verse on failure.
 
+    Prefers Featherless when configured (no card required), then Gloo, then
+    returns the original verse so SMS/USSD never breaks.
+
     Args:
-        verse_text: Plain scripture text on which Gloo should reflect.
+        verse_text: Plain scripture text on which the model should reflect.
         mood: Optional reader mood, such as ``"stressed"`` or ``"grateful"``.
         time_of_day: Optional local time context, such as ``"morning"``.
 
     Returns:
-        A personalized reflection of fewer than 100 words. If credentials,
-        networking, the API, or response parsing fails, returns ``verse_text``
-        unchanged so the phone interaction can continue.
+        A personalized reflection of fewer than 100 words, or ``verse_text``.
     """
 
+    prompt = _build_prompt(verse_text, mood, time_of_day)
+
     try:
-        token = _get_access_token()
-        response = requests.post(
-            GLOO_BASE_URL,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": _build_prompt(
-                            verse_text, mood, time_of_day
-                        ),
-                    }
-                ],
-                "auto_routing": True,
-                "temperature": 0.6,
-                "max_tokens": 160,
-            },
-            timeout=GLOO_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-        reflection = _extract_reflection(response.json())
-        return _limit_words(reflection) if reflection else verse_text
+        reflection = _reflect_with_featherless(prompt)
+        if reflection:
+            return _limit_words(reflection)
     except (
         requests.RequestException,
         requests.JSONDecodeError,
@@ -188,7 +234,23 @@ def generate_reflection(
         TypeError,
         AttributeError,
         ValueError,
+        KeyError,
     ):
-        # Personalization is optional; scripture delivery must remain available
-        # during Gloo outages or configuration errors.
-        return verse_text
+        pass
+
+    try:
+        reflection = _reflect_with_gloo(prompt)
+        if reflection:
+            return _limit_words(reflection)
+    except (
+        requests.RequestException,
+        requests.JSONDecodeError,
+        RuntimeError,
+        TypeError,
+        AttributeError,
+        ValueError,
+        KeyError,
+    ):
+        pass
+
+    return verse_text
