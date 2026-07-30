@@ -24,6 +24,16 @@ class YouVersionUnsupportedError(YouVersionError):
     """Raised when the public Platform API does not expose requested content."""
 
 
+# Labels shown on USSD menus; codes are BCP 47 ranges for /v1/bibles.
+SUPPORTED_LANGUAGES: list[tuple[str, str]] = [
+    ("en", "English"),
+    ("sw", "Swahili"),
+    ("kln", "Kalenjin"),
+    ("ki", "Kikuyu"),
+    ("luo", "Dholuo"),
+]
+
+
 def _normalise_language(language: str) -> str:
     """Convert a supported language code to the BCP 47 form used by YouVersion.
 
@@ -34,7 +44,14 @@ def _normalise_language(language: str) -> str:
         A BCP 47-compatible language range.
     """
 
-    aliases = {"eng": "en"}
+    aliases = {
+        "eng": "en",
+        "swa": "sw",
+        "swh": "sw",
+        "kal": "kln",
+        "kik": "ki",
+        "luo": "luo",
+    }
     cleaned_language = language.strip().lower()
     return aliases.get(cleaned_language, cleaned_language)
 
@@ -91,35 +108,78 @@ def _request_json(path: str, params: dict[str, Any] | None = None) -> dict[str, 
     return payload
 
 
-def _get_bible_id(language: str) -> int:
-    """Find the first Bible version licensed for the requested language.
+def list_bibles(language: str, limit: int = 5) -> list[dict[str, Any]]:
+    """List licensed Bible versions available for a language.
 
     Args:
-        language: An ISO 639 or BCP 47 language code.
+        language: ISO 639 or BCP 47 language code.
+        limit: Maximum number of versions to return for USSD menus.
 
     Returns:
-        The numeric ID of an available Bible version.
+        A list of dictionaries with ``id``, ``abbreviation``, and ``title``.
+
+    Raises:
+        YouVersionNotFoundError: If no licensed Bible is available.
+        YouVersionError: If the API request or response is invalid.
+    """
+
+    language_range = _normalise_language(language)
+    payload = _request_json(
+        "bibles",
+        params={
+            "language_ranges[]": language_range,
+            "page_size": max(1, min(limit, 20)),
+        },
+    )
+    bibles = payload.get("data")
+    if not isinstance(bibles, list) or not bibles:
+        raise YouVersionNotFoundError(
+            f"No licensed Bible version is available for '{language}'. "
+            "Accept that language's license in the YouVersion developer portal."
+        )
+
+    results: list[dict[str, Any]] = []
+    for bible in bibles[:limit]:
+        if not isinstance(bible, dict):
+            continue
+        bible_id = bible.get("id")
+        if not isinstance(bible_id, int):
+            continue
+        abbreviation = bible.get("abbreviation") or bible.get(
+            "localized_abbreviation"
+        ) or str(bible_id)
+        title = bible.get("title") or bible.get("localized_title") or abbreviation
+        results.append(
+            {
+                "id": bible_id,
+                "abbreviation": str(abbreviation),
+                "title": str(title),
+            }
+        )
+
+    if not results:
+        raise YouVersionError("YouVersion returned no usable Bible versions.")
+    return results
+
+
+def _get_bible_id(language: str, bible_id: int | None = None) -> int:
+    """Resolve a Bible ID from an explicit choice or the first licensed version.
+
+    Args:
+        language: ISO 639 or BCP 47 language code.
+        bible_id: Optional saved version ID from Redis.
+
+    Returns:
+        The numeric Bible version ID to use for passage requests.
 
     Raises:
         YouVersionNotFoundError: If no licensed Bible is available.
         YouVersionError: If YouVersion returns malformed version data.
     """
 
-    language_range = _normalise_language(language)
-    payload = _request_json(
-        "bibles",
-        params={"language_ranges[]": language_range, "page_size": 1},
-    )
-    bibles = payload.get("data")
-    if not isinstance(bibles, list) or not bibles:
-        raise YouVersionNotFoundError(
-            f"No licensed Bible version is available for '{language}'."
-        )
-
-    bible_id = bibles[0].get("id") if isinstance(bibles[0], dict) else None
-    if not isinstance(bible_id, int):
-        raise YouVersionError("YouVersion returned an invalid Bible version.")
-    return bible_id
+    if isinstance(bible_id, int) and bible_id > 0:
+        return bible_id
+    return list_bibles(language, limit=1)[0]["id"]
 
 
 def _extract_content(payload: dict[str, Any]) -> str:
@@ -146,14 +206,18 @@ def _extract_content(payload: dict[str, Any]) -> str:
     return " ".join(content.split())
 
 
-def get_verse_of_the_day(language: str = "eng") -> str:
+def get_verse_of_the_day(
+    language: str = "eng",
+    bible_id: int | None = None,
+) -> str:
     """Return today's curated YouVersion verse as plain text.
 
     Args:
         language: ISO 639 or BCP 47 code for the desired Bible language.
+        bible_id: Optional preferred Bible version ID from the user session.
 
     Returns:
-        Today's verse text in the first licensed version for the language.
+        Today's verse text in the requested or first licensed version.
 
     Raises:
         YouVersionNotFoundError: If today's verse or a translation is missing.
@@ -167,18 +231,23 @@ def get_verse_of_the_day(language: str = "eng") -> str:
         raise YouVersionNotFoundError(
             "YouVersion did not provide a Verse of the Day reference."
         )
-    return get_passage(passage_id, language)
+    return get_passage(passage_id, language, bible_id=bible_id)
 
 
-def get_passage(reference: str, language: str = "eng") -> str:
+def get_passage(
+    reference: str,
+    language: str = "eng",
+    bible_id: int | None = None,
+) -> str:
     """Return a Bible passage as plain text.
 
     Args:
         reference: A USFM passage ID, for example ``"JHN.3.16"``.
         language: ISO 639 or BCP 47 code for the desired Bible language.
+        bible_id: Optional preferred Bible version ID from the user session.
 
     Returns:
-        Plain passage text in the first licensed version for the language.
+        Plain passage text in the requested or first licensed version.
 
     Raises:
         ValueError: If ``reference`` is blank.
@@ -190,39 +259,33 @@ def get_passage(reference: str, language: str = "eng") -> str:
     if not cleaned_reference:
         raise ValueError("reference must not be blank")
 
-    bible_id = _get_bible_id(language)
+    resolved_bible_id = _get_bible_id(language, bible_id)
     payload = _request_json(
-        f"bibles/{bible_id}/passages/{cleaned_reference}",
+        f"bibles/{resolved_bible_id}/passages/{cleaned_reference}",
         params={"format": "text"},
     )
     return _extract_content(payload)
 
 
 def get_reading_plan_day(plan_id: str, day_number: int) -> str:
-    """Report that reading-plan content is unavailable in Platform API v1.
+    """Return the local plan reference for a day (not YouVersion plan APIs).
 
     Args:
-        plan_id: Identifier of the desired YouVersion reading plan.
+        plan_id: Local plan identifier such as ``"hope-kenya"``.
         day_number: One-based day number within that plan.
 
     Returns:
-        This function does not return while the public API lacks plan content.
+        The USFM reference string for that day.
 
     Raises:
-        ValueError: If ``plan_id`` is blank or ``day_number`` is below one.
-        YouVersionUnsupportedError: Always, because the current public
-            YouVersion Platform API has no reading-plan content endpoint.
+        ValueError: If ``plan_id`` is blank, ``day_number`` is invalid, or the
+            local plan does not define that day.
     """
+
+    from app.services.reading_plan import get_plan_reference
 
     if not plan_id.strip():
         raise ValueError("plan_id must not be blank")
     if day_number < 1:
         raise ValueError("day_number must be at least 1")
-
-    # Do not call a guessed endpoint: the documented Platform API currently
-    # exposes Bible passages and VOTD, but not reading-plan schedules/content.
-    raise YouVersionUnsupportedError(
-        "The YouVersion Platform API does not currently expose reading-plan "
-        "day content. Store plan references locally or use an approved content "
-        "source before enabling this feature."
-    )
+    return get_plan_reference(plan_id, day_number)
