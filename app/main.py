@@ -1,11 +1,17 @@
 """FastAPI application entrypoint for feature-phone webhooks."""
 
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.routes.sms import router as sms_router
 from app.routes.ussd import router as ussd_router
 from app.routes.voice import router as voice_router
 
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(
     title="Scripture Without Screens",
@@ -16,6 +22,18 @@ app = FastAPI(
 app.include_router(ussd_router)
 app.include_router(sms_router)
 app.include_router(voice_router)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/")
+def feature_phone_demo() -> FileResponse:
+    """Serve the judge-facing feature-phone USSD simulator.
+
+    Returns:
+        The HTML page that dials the live ``/ussd`` webhook.
+    """
+
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.get("/health")

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scripture Without Screens — Feature Phone Demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/simulator.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+
+    <main class="stage">
+      <header class="brand">
+        <p class="brand__mark">Scripture Without Screens</p>
+        <p class="brand__line">
+          Feature-phone demo · live USSD and SMS against your backend
+        </p>
+      </header>
+
+      <section class="demo" aria-label="Feature phone simulator">
+        <div class="phone" id="phone">
+          <div class="phone__ear"></div>
+          <div class="phone__screen">
+            <div class="status-bar">
+              <span>Safaricom</span>
+              <span id="clock">12:00</span>
+              <span>▐▐▌</span>
+            </div>
+
+            <div class="screen-body" id="screenBody">
+              <div class="idle" id="idleView">
+                <p class="idle__hint" id="idleHint">No smartphone needed</p>
+                <p class="idle__code" id="dialPreview">*384*51567#</p>
+                <p class="idle__sub" id="idleSub">Press Call to open USSD</p>
+              </div>
+
+              <div class="ussd hidden" id="ussdView" role="dialog" aria-modal="true">
+                <pre class="ussd__text" id="ussdText"></pre>
+                <input
+                  class="ussd__input"
+                  id="ussdInput"
+                  type="text"
+                  inputmode="numeric"
+                  maxlength="8"
+                  autocomplete="off"
+                  aria-label="USSD menu choice"
+                />
+                <div class="ussd__actions">
+                  <button type="button" class="ussd__btn" id="cancelBtn">CANCEL</button>
+                  <button type="button" class="ussd__btn ussd__btn--primary" id="sendBtn">
+                    SEND
+                  </button>
+                </div>
+              </div>
+
+              <div class="sms-thread hidden" id="smsView" aria-live="polite">
+                <p class="sms-thread__label">Inbox</p>
+                <div class="sms-bubble" id="smsBubble"></div>
+              </div>
+
+              <div class="toast hidden" id="toast"></div>
+            </div>
+          </div>
+
+          <div class="keypad" id="keypad">
+            <button type="button" data-key="1">1</button>
+            <button type="button" data-key="2">2<sub>ABC</sub></button>
+            <button type="button" data-key="3">3<sub>DEF</sub></button>
+            <button type="button" data-key="4">4<sub>GHI</sub></button>
+            <button type="button" data-key="5">5<sub>JKL</sub></button>
+            <button type="button" data-key="6">6<sub>MNO</sub></button>
+            <button type="button" data-key="7">7<sub>PQRS</sub></button>
+            <button type="button" data-key="8">8<sub>TUV</sub></button>
+            <button type="button" data-key="9">9<sub>WXYZ</sub></button>
+            <button type="button" data-key="*">*</button>
+            <button type="button" data-key="0">0<sub>+</sub></button>
+            <button type="button" data-key="#">#</button>
+          </div>
+
+          <div class="soft-keys">
+            <button type="button" class="soft soft--clear" id="clearBtn">Clear</button>
+            <button type="button" class="soft soft--call" id="callBtn">Call</button>
+            <button type="button" class="soft soft--end" id="endBtn">End</button>
+          </div>
+        </div>
+
+        <aside class="coach">
+          <div class="channel-toggle" role="tablist" aria-label="Demo channel">
+            <button
+              type="button"
+              class="channel-toggle__btn is-active"
+              data-channel="ussd"
+              id="tabUssd"
+            >
+              USSD
+            </button>
+            <button
+              type="button"
+              class="channel-toggle__btn"
+              data-channel="sms"
+              id="tabSms"
+            >
+              SMS
+            </button>
+          </div>
+
+          <div id="coachUssd">
+            <h2>Judge demo flow</h2>
+            <ol>
+              <li>Press <strong>Call</strong> — dials <code>*384*51567#</code></li>
+              <li>Same menu Africa’s Talking returned on a real handset</li>
+              <li>Type <strong>1</strong> → SEND for Verse of the Day</li>
+              <li>
+                Or <strong>2</strong> → reading plan (continue / choose / restart)
+              </li>
+              <li>Or <strong>3</strong> → language, <strong>4</strong> → Bible version</li>
+            </ol>
+            <p class="coach__note">
+              This UI talks to your live <code>POST /ussd</code> backend. Farmers
+              still use a real phone — judges see it here.
+            </p>
+          </div>
+
+          <div id="coachSms" class="hidden">
+            <h2>Mood SMS</h2>
+            <p class="coach__note" style="margin-top: 0">
+              Tap a mood. The phone shows the same reflection body a farmer would
+              receive — powered by Featherless (or Gloo) + YouVersion.
+            </p>
+            <div class="mood-row">
+              <button type="button" class="mood-btn" data-mood="STRESSED">STRESSED</button>
+              <button type="button" class="mood-btn" data-mood="GRATEFUL">GRATEFUL</button>
+              <button type="button" class="mood-btn" data-mood="TIRED">TIRED</button>
+            </div>
+          </div>
+
+          <p class="coach__status" id="connStatus">Connecting…</p>
+        </aside>
+      </section>
+    </main>
+
+    <script src="/static/simulator.js"></script>
+  </body>
+</html>
