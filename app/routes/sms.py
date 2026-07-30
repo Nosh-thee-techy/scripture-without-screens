@@ -12,6 +12,7 @@ from app.services.africastalking_client import (
 from app.services.gloo_client import generate_reflection
 from app.services.youversion_client import YouVersionError, get_verse_of_the_day
 from app.utils.formatters import format_for_sms
+from app.utils.session_store import get_user_session
 
 
 router = APIRouter(tags=["sms"])
@@ -23,11 +24,12 @@ SCRIPTURE_ERROR_MESSAGE = (
 )
 
 
-def _build_sms_reply(message: str) -> str:
+def _build_sms_reply(message: str, phone_number: str) -> str:
     """Build an SMS reply from an inbound mood word.
 
     Args:
         message: Text received from the subscriber.
+        phone_number: Subscriber MSISDN used to load Redis preferences.
 
     Returns:
         A single-SMS reflection for a supported mood, a usage hint for other
@@ -38,8 +40,12 @@ def _build_sms_reply(message: str) -> str:
     if mood not in SUPPORTED_MOODS:
         return MOOD_HELP_MESSAGE
 
+    session = get_user_session(phone_number)
     try:
-        verse = get_verse_of_the_day()
+        verse = get_verse_of_the_day(
+            language=str(session.get("language") or "en"),
+            bible_id=session.get("bible_id"),
+        )
     except YouVersionError:
         return SCRIPTURE_ERROR_MESSAGE
 
@@ -65,7 +71,7 @@ def handle_inbound_sms(
         if Africa's Talking cannot accept the outbound SMS.
     """
 
-    reply = _build_sms_reply(text)
+    reply = _build_sms_reply(text, from_number)
     try:
         # Reuse the receiving shortcode as the sender when it is configured for
         # two-way SMS, keeping the conversation on the same visible number.
@@ -75,3 +81,24 @@ def handle_inbound_sms(
 
     # Africa's Talking expects a plain acknowledgement rather than JSON.
     return PlainTextResponse("GOOD")
+
+
+@router.post("/demo/sms", response_class=PlainTextResponse)
+def demo_sms_preview(
+    from_number: Annotated[str, Form(alias="from")] = "+254711000111",
+    text: Annotated[str, Form()] = "",
+) -> PlainTextResponse:
+    """Preview an SMS reflection without sending via Africa's Talking.
+
+    Used by the feature-phone judge UI so reflections can be shown on-screen
+    without consuming sandbox SMS credits.
+
+    Args:
+        from_number: Demo MSISDN used to load Redis preferences.
+        text: Mood word or free text, same as the live ``/sms`` webhook.
+
+    Returns:
+        The exact SMS body a subscriber would receive.
+    """
+
+    return PlainTextResponse(_build_sms_reply(text, from_number))
