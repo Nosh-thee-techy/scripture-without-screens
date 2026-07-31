@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from typing import Any
 
 from app.config import REDIS_URL, SESSION_TTL_SECONDS
@@ -39,24 +40,47 @@ def _get_redis() -> Any | None:
         return _redis_client
 
     _redis_checked = True
-    try:
-        import redis
+    # Hard cap: Windows TCP stacks sometimes ignore short redis timeouts.
+    # Language pick must not wait on a missing Redis server.
+    probe_result: dict[str, Any] = {"client": None, "error": None}
 
-        client = redis.Redis.from_url(
-            REDIS_URL,
-            decode_responses=True,
-            socket_connect_timeout=1,
-            socket_timeout=1,
-        )
-        client.ping()
-        _redis_client = client
-        logger.info("Redis session store connected at %s", REDIS_URL)
-    except Exception as exc:
-        # Prefer continuing the call over failing the farmer's USSD session.
+    def _probe() -> None:
+        try:
+            import redis
+
+            kwargs: dict[str, Any] = {
+                "decode_responses": True,
+                "socket_connect_timeout": 0.15,
+                "socket_timeout": 0.25,
+                "retry_on_timeout": False,
+            }
+            try:
+                from redis.backoff import NoBackoff
+                from redis.retry import Retry
+
+                kwargs["retry"] = Retry(NoBackoff(), 0)
+            except Exception:
+                pass
+
+            client = redis.Redis.from_url(REDIS_URL, **kwargs)
+            client.ping()
+            probe_result["client"] = client
+        except Exception as exc:  # noqa: BLE001 - prefer memory over USSD hang
+            probe_result["error"] = exc
+
+    worker = threading.Thread(target=_probe, name="redis-probe", daemon=True)
+    worker.start()
+    worker.join(0.35)
+    if worker.is_alive() or probe_result["client"] is None:
         _redis_client = None
+        reason = probe_result["error"] or "connect timed out"
         logger.warning(
-            "Redis unavailable (%s); using in-memory sessions.", exc
+            "Redis unavailable (%s); using in-memory sessions.", reason
         )
+        return _redis_client
+
+    _redis_client = probe_result["client"]
+    logger.info("Redis session store connected at %s", REDIS_URL)
     return _redis_client
 
 
@@ -77,14 +101,32 @@ def _default_session() -> dict[str, Any]:
     """Return a fresh preference document for a new subscriber.
 
     Returns:
-        Default language, unset Bible ID, and plan day one.
+        Default language, unset Bible ID, plan day one, and kids-flow fields.
     """
 
     return {
         "language": DEFAULT_LANGUAGE,
+        "language_set": False,
         "bible_id": None,
         "plan_day": DEFAULT_PLAN_DAY,
         "plan_id": "hope-kenya",
+        "age_band": None,
+        "kids_story_id": None,
+        "kids_section": 0,
+        "kids_quiz_index": 0,
+        "kids_quiz_retries": 0,
+        "ussd_flow": "boot",
+        "voice_flow": "boot",
+        # Daily morning SMS (VOTD + plan verse) when True.
+        "sms_daily": True,
+        # Verse of the Day + Read My Bible navigation
+        "votd_passage_id": None,
+        "read_testament": None,
+        "read_book": None,
+        "read_chapter": None,
+        "read_verse": 1,
+        "read_book_page": 0,
+        "read_chapter_page": 0,
     }
 
 
@@ -166,6 +208,48 @@ def clear_user_session(phone_number: str) -> None:
     if client is not None:
         client.delete(key)
     _memory_sessions.pop(key, None)
+
+
+def list_daily_sms_subscribers() -> list[tuple[str, dict[str, Any]]]:
+    """Return ``(phone, session)`` pairs opted into daily SMS.
+
+    Scans Redis when available, otherwise the in-memory demo store.
+    """
+
+    results: list[tuple[str, dict[str, Any]]] = []
+    client = _get_redis()
+    if client is not None:
+        try:
+            for key in client.scan_iter(match=f"{SESSION_KEY_PREFIX}*", count=100):
+                raw = client.get(key)
+                if not raw:
+                    continue
+                try:
+                    payload = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(payload, dict):
+                    continue
+                if not payload.get("language_set"):
+                    continue
+                if payload.get("sms_daily", True) is False:
+                    continue
+                phone = str(key).removeprefix(SESSION_KEY_PREFIX)
+                merged = _default_session()
+                merged.update(payload)
+                results.append((phone, merged))
+            return results
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Redis scan for SMS subscribers failed: %s", exc)
+
+    for key, payload in _memory_sessions.items():
+        if not payload.get("language_set"):
+            continue
+        if payload.get("sms_daily", True) is False:
+            continue
+        phone = key.removeprefix(SESSION_KEY_PREFIX)
+        results.append((phone, dict(payload)))
+    return results
 
 
 def reset_session_backend_for_tests() -> None:

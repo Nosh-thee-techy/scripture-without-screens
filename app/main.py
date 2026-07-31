@@ -6,9 +6,11 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.routes.jobs import router as jobs_router
 from app.routes.sms import router as sms_router
 from app.routes.ussd import router as ussd_router
 from app.routes.voice import router as voice_router
+from app.routes.whatsapp import router as whatsapp_router
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -22,6 +24,8 @@ app = FastAPI(
 app.include_router(ussd_router)
 app.include_router(sms_router)
 app.include_router(voice_router)
+app.include_router(jobs_router)
+app.include_router(whatsapp_router)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 

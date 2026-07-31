@@ -15,9 +15,19 @@ def test_update_user_session_persists_language_and_plan_day() -> None:
     phone = "+254711111111"
     clear_user_session(phone)
 
-    update_user_session(phone, language="sw", plan_day=3, bible_id=111)
+    update_user_session(
+        phone,
+        language="sw",
+        plan_day=3,
+        bible_id=111,
+        language_set=True,
+        age_band="6_9",
+    )
     session = get_user_session(phone)
 
     assert session["language"] == "sw"
     assert session["plan_day"] == 3
     assert session["bible_id"] == 111
+    assert session["language_set"] is True
+    assert session["age_band"] == "6_9"
+    assert session["kids_story_id"] is None

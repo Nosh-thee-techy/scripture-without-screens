@@ -114,16 +114,28 @@
             <h2>Judge demo flow</h2>
             <ol>
               <li>Press <strong>Call</strong> — dials <code>*384*51567#</code></li>
-              <li>Same menu Africa’s Talking returned on a real handset</li>
-              <li>Type <strong>1</strong> → SEND for Verse of the Day</li>
+              <li>First dial: welcome → pick language (saved in Redis)</li>
               <li>
-                Or <strong>2</strong> → reading plan (continue / choose / restart)
+                <strong>1</strong> Verse of the Day → cite + explain / pray /
+                read chapter
               </li>
-              <li>Or <strong>3</strong> → language, <strong>4</strong> → Bible version</li>
+              <li>
+                <strong>2</strong> Read My Bible → OT/NT → book → chapter → next chapter
+              </li>
+              <li>
+                <strong>3</strong> Reading Plan → topic → plan → day
+              </li>
+              <li>
+                <strong>4</strong> Kids: VOTD (explain/pray/affirm) · Stories · Plans
+              </li>
+              <li>
+                Nested screens: <strong>8</strong> Change Language,
+                <strong>0</strong> Home
+              </li>
             </ol>
             <p class="coach__note">
               This UI talks to your live <code>POST /ussd</code> backend. Farmers
-              still use a real phone — judges see it here.
+              and kids still use a real phone — judges see it here.
             </p>
           </div>
 
