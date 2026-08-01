@@ -1,5 +1,11 @@
 """Text formatting helpers for feature-phone channels."""
 
+from __future__ import annotations
+
+from typing import Any
+
+from app.utils.verse_format import format_verse_unit
+
 
 SMS_CHARACTER_LIMIT = 160
 USSD_RESPONSE_LIMIT = 160
@@ -155,6 +161,123 @@ def ussd_page(
     index = max(0, min(int(page), total - 1))
     has_more = index < total - 1
     return pages[index], total, has_more
+
+
+def _content_limit(limit: int | None) -> int:
+    return (
+        limit
+        if limit is not None
+        else USSD_CON_LIMIT - USSD_CON_PREFIX_LENGTH
+    )
+
+
+def paginate_verse_units(
+    heading: str,
+    verses: list[tuple[int, str]] | list[dict[str, Any]],
+    footer: str,
+    more_line: str,
+    *,
+    continue_footer: str | None = None,
+    limit: int | None = None,
+) -> list[tuple[str, int]]:
+    """Paginate scripture by whole verses so each page knows its start verse.
+
+    Returns:
+        A list of ``(screen_text, first_verse_number)`` pages. Mid-pages show
+        only More + continue_footer; the last page shows the full ``footer``.
+    """
+
+    content_limit = _content_limit(limit)
+    footer = footer.strip("\n")
+    more_line = more_line.strip()
+    mid_tail = more_line
+    if continue_footer and continue_footer.strip():
+        mid_tail = f"{more_line}\n{continue_footer.strip()}"
+
+    normalized: list[tuple[int, str]] = []
+    for item in verses:
+        if isinstance(item, dict):
+            normalized.append((int(item["n"]), str(item.get("t") or "")))
+        else:
+            normalized.append((int(item[0]), str(item[1])))
+    normalized = [(n, t.strip()) for n, t in normalized if t.strip()]
+    if not normalized:
+        if heading:
+            return [(f"{heading}\n{footer}", 1)]
+        return [(footer, 1)]
+
+    pages: list[tuple[str, int]] = []
+    page_units: list[str] = []
+    page_first: int | None = None
+    heading = heading.strip()
+
+    def _body(units: list[str]) -> str:
+        joined = " ".join(units)
+        return f"{heading}\n{joined}" if heading else joined
+
+    def _flush(final: bool) -> None:
+        nonlocal page_units, page_first
+        if not page_units or page_first is None:
+            return
+        body = _body(page_units)
+        screen = f"{body}\n{footer}" if final else f"{body}\n{mid_tail}"
+        if len(screen) > content_limit:
+            # Extremely long single verse: fall back to hard trim of body.
+            reserved = len(footer if final else mid_tail) + 1
+            trimmed = truncate_text(
+                body, max(24, content_limit - reserved), suffix=""
+            )
+            screen = f"{trimmed}\n{footer}" if final else f"{trimmed}\n{mid_tail}"
+        pages.append((screen, page_first))
+        page_units = []
+        page_first = None
+
+    for number, text in normalized:
+        unit = format_verse_unit(number, text)
+        trial_units = page_units + [unit]
+        trial_body = _body(trial_units)
+        # Pack against the mid-page tail so More+Home always fit while reading.
+        if page_units and len(f"{trial_body}\n{mid_tail}") > content_limit:
+            _flush(final=False)
+            page_units = [unit]
+            page_first = number
+            continue
+        page_units = trial_units
+        if page_first is None:
+            page_first = number
+
+    _flush(final=True)
+    return pages or [(footer, 1)]
+
+
+def ussd_verse_page(
+    heading: str,
+    verses: list[tuple[int, str]] | list[dict[str, Any]],
+    footer: str,
+    more_line: str,
+    page: int = 0,
+    *,
+    continue_footer: str | None = None,
+    limit: int | None = None,
+) -> tuple[str, int, int, bool]:
+    """Return one verse-aware page.
+
+    Returns:
+        ``(screen, first_verse, total_pages, has_more)``.
+    """
+
+    pages = paginate_verse_units(
+        heading,
+        verses,
+        footer,
+        more_line,
+        continue_footer=continue_footer,
+        limit=limit,
+    )
+    total = len(pages)
+    index = max(0, min(int(page), total - 1))
+    screen, first_verse = pages[index]
+    return screen, first_verse, total, index < total - 1
 
 
 def format_for_sms(text: str) -> str:

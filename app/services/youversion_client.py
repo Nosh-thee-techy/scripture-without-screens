@@ -305,6 +305,18 @@ def _extract_content(payload: dict[str, Any]) -> str:
 
     # Text responses can contain line breaks and indentation that waste limited
     # USSD/SMS space, so collapse all whitespace without truncating scripture.
+    # HTML passages are reduced to plain text (tags stripped).
+    if "<" in content and "yv-v" in content:
+        from app.utils.verse_format import parse_verses_from_html
+
+        verses = parse_verses_from_html(content)
+        if verses:
+            # Plain text without superscripts for AI / SMS reflections.
+            return " ".join(text for _num, text in verses)
+    if "<" in content:
+        from app.utils.verse_format import strip_html
+
+        return strip_html(content)
     return " ".join(content.split())
 
 
@@ -312,7 +324,7 @@ def get_passage_detail(
     reference: str,
     language: str = "eng",
     bible_id: int | None = None,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """Return passage text plus citation metadata from YouVersion.
 
     Args:
@@ -321,26 +333,48 @@ def get_passage_detail(
         bible_id: Optional preferred Bible version ID from the user session.
 
     Returns:
-        Dict with ``passage_id``, ``reference`` (human cite), and ``text``.
+        Dict with ``passage_id``, ``reference``, plain ``text``, ``verses``
+        (list of ``{n, t}``), and ``text_numbered`` (tiny superscripts).
     """
 
     from app.services.usfm import format_usfm_reference
+    from app.utils.verse_format import (
+        numbered_passage_text,
+        parse_verses_from_html,
+    )
 
     cleaned_reference = reference.strip()
     if not cleaned_reference:
         raise ValueError("reference must not be blank")
 
     resolved_bible_id = _get_bible_id(language, bible_id)
-    cache_key = f"{resolved_bible_id}:{cleaned_reference}"
+    # Version the cache key so older plain-text entries are not reused.
+    cache_key = f"{resolved_bible_id}:{cleaned_reference}:v2"
     cached = _cache_get(_passage_cache, cache_key)
     if cached is not None:
         return dict(cached)
 
+    # HTML includes verse markers (yv-v / yv-vlbl) we turn into tiny numbers.
     payload = _request_json(
         f"bibles/{resolved_bible_id}/passages/{cleaned_reference}",
-        params={"format": "text"},
+        params={"format": "html"},
     )
-    text = _extract_content(payload)
+    content = payload.get("content")
+    if not isinstance(content, str) or not content.strip():
+        raise YouVersionNotFoundError(
+            "YouVersion returned no text for the requested passage."
+        )
+
+    verses_tuples = parse_verses_from_html(content)
+    if verses_tuples:
+        text = " ".join(piece for _num, piece in verses_tuples)
+        text_numbered = numbered_passage_text(verses_tuples)
+        verses = [{"n": num, "t": piece} for num, piece in verses_tuples]
+    else:
+        text = _extract_content({"content": content})
+        text_numbered = text
+        verses = [{"n": 1, "t": text}] if text else []
+
     api_reference = payload.get("reference")
     human = (
         str(api_reference).strip()
@@ -351,6 +385,8 @@ def get_passage_detail(
         "passage_id": cleaned_reference,
         "reference": human,
         "text": text,
+        "text_numbered": text_numbered,
+        "verses": verses,
     }
     _cache_set(_passage_cache, cache_key, detail)
     return dict(detail)

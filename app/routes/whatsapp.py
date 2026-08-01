@@ -43,6 +43,7 @@ from app.services.whatsapp_client import (
     WhatsAppError,
     extract_inbound_messages,
     send_whatsapp_messages,
+    send_whatsapp_text,
     verify_webhook_signature,
     whatsapp_configured,
 )
@@ -1113,8 +1114,23 @@ def _build_reply(phone: str, text: str) -> WaOut:
         return _handle_lang_picker(phone, session, "")
 
     if not session.get("language_set"):
-        _set_wa(phone, "lang")
-        return _handle_lang_picker(phone, get_user_session(phone), cleaned)
+        # Digit → language picker. Anything else (hi/hiii/…) opens English menu
+        # so the first WhatsApp ping is never a silent dead-end.
+        if cleaned.isdigit():
+            _set_wa(phone, "lang")
+            return _handle_lang_picker(phone, get_user_session(phone), cleaned)
+        _set_wa(
+            phone,
+            "main",
+            language="en",
+            language_set=True,
+            bible_id=None,
+            sms_daily=True,
+        )
+        return (
+            "Karibu! Welcome to Scripture Without Screens.\n"
+            f"{_menu('en')}"
+        )
 
     flow = str(session.get("wa_flow") or "main")
     action = cleaned
@@ -1190,6 +1206,7 @@ async def receive_whatsapp_webhook(
 
     raw = await request.body()
     if not verify_webhook_signature(raw, x_hub_signature_256):
+        logger.warning("WhatsApp webhook rejected: bad X-Hub-Signature-256")
         raise HTTPException(status_code=403, detail="Invalid signature.")
 
     try:
@@ -1204,13 +1221,41 @@ async def receive_whatsapp_webhook(
         logger.warning("WhatsApp inbound ignored: credentials not configured.")
         return {"status": "ignored"}
 
-    for message in extract_inbound_messages(payload):
-        phone = _normalize_phone(message["from"])
-        reply = _build_reply(phone, message["text"])
+    inbound = extract_inbound_messages(payload)
+    # Status callbacks arrive with no messages — that is normal.
+    if not inbound:
+        field = None
         try:
+            field = payload["entry"][0]["changes"][0].get("field")
+        except (KeyError, IndexError, TypeError, AttributeError):
+            field = None
+        logger.info(
+            "WhatsApp webhook POST ok (no text messages; field=%s object=%s)",
+            field,
+            payload.get("object"),
+        )
+        return {"status": "ok"}
+
+    for message in inbound:
+        phone = _normalize_phone(message["from"])
+        print(f"[whatsapp] inbound {phone}: {message['text'][:80]}", flush=True)
+        try:
+            reply = _build_reply(phone, message["text"])
             send_whatsapp_messages(phone, _as_messages(reply))
+            print(f"[whatsapp] reply sent to {phone}", flush=True)
         except (WhatsAppError, ValueError) as exc:
+            print(f"[whatsapp] SEND FAILED {phone}: {exc}", flush=True)
             logger.warning("WhatsApp send failed for %s: %s", phone, exc)
+        except Exception as exc:  # noqa: BLE001 - never fail the webhook ACK
+            print(f"[whatsapp] HANDLER ERROR {phone}: {exc}", flush=True)
+            logger.exception("WhatsApp handler error for %s", phone)
+            try:
+                send_whatsapp_text(
+                    phone,
+                    "Something went wrong loading Scripture. Reply hi to try again.",
+                )
+            except Exception:
+                pass
 
     return {"status": "ok"}
 

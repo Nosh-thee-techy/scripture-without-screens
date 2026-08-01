@@ -69,6 +69,26 @@ body {
   font-size: 1.05rem;
 }
 
+.brand__video {
+  margin: 1rem 0 0;
+}
+
+.brand__video a,
+.coach__video a {
+  color: var(--paper);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 80%, transparent);
+  text-underline-offset: 0.22em;
+  transition: color 0.2s ease, text-decoration-color 0.2s ease;
+}
+
+.brand__video a:hover,
+.coach__video a:hover {
+  color: #fff;
+  text-decoration-color: var(--accent);
+}
+
 .demo {
   display: grid;
   grid-template-columns: minmax(280px, 340px) 1fr;
@@ -411,6 +431,11 @@ body {
   font-family: var(--font-mono);
   font-size: 0.85rem;
   color: var(--moss);
+}
+
+.coach__video {
+  margin: 1.25rem 0 0;
+  font-size: 0.95rem;
 }
 
 .hidden {

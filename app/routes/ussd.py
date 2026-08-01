@@ -52,7 +52,8 @@ from app.services.youversion_client import (
     prefer_bible_id,
     warm_bibles_for_language,
 )
-from app.utils.formatters import format_for_ussd, ussd_page
+from app.utils.formatters import format_for_ussd, ussd_page, ussd_verse_page
+from app.utils.verse_format import first_verse_number
 from app.utils.i18n import (
     LANGUAGE_NATIVE_LABELS,
     category_name,
@@ -405,6 +406,8 @@ def _render_scroll(
     if reset_text:
         session_fields["scroll_text"] = body
         session_fields["scroll_page"] = page
+        session_fields["scroll_verses"] = None
+        session_fields["scroll_heading"] = None
     else:
         session_fields.setdefault("scroll_page", page)
     screen, _total, _has_more = ussd_page(
@@ -418,21 +421,71 @@ def _render_scroll(
     return _ussd_response("CON", screen)
 
 
+def _render_verse_scroll(
+    phone_number: str,
+    *,
+    flow: str,
+    heading: str,
+    verses: list[dict[str, Any]],
+    footer: str,
+    language: str,
+    page: int = 0,
+    **session_fields: Any,
+) -> PlainTextResponse:
+    """Page scripture by verse with tiny numbers; persist ``read_verse``."""
+
+    more_line = f"9. {t(language, 'more_text')}"
+    continue_footer = f"0. {t(language, 'home')}"
+    screen, first_verse, _total, _has_more = ussd_verse_page(
+        heading,
+        verses,
+        footer,
+        more_line,
+        page=page,
+        continue_footer=continue_footer,
+    )
+    _set_flow(
+        phone_number,
+        flow,
+        scroll_verses=verses,
+        scroll_heading=heading,
+        scroll_page=page,
+        scroll_text=None,
+        read_verse=first_verse,
+        **session_fields,
+    )
+    return _ussd_response("CON", screen)
+
+
 def _scroll_has_more(
     session: dict[str, Any], *, footer: str, language: str
 ) -> bool:
     """True when the subscriber still has unread scroll pages."""
 
+    page = int(session.get("scroll_page") or 0)
+    more_line = f"9. {t(language, 'more_text')}"
+    continue_footer = f"0. {t(language, 'home')}"
+    verses = session.get("scroll_verses")
+    if isinstance(verses, list) and verses:
+        _screen, _first, _total, has_more = ussd_verse_page(
+            str(session.get("scroll_heading") or ""),
+            verses,
+            footer,
+            more_line,
+            page=page,
+            continue_footer=continue_footer,
+        )
+        return has_more
+
     body = session.get("scroll_text")
     if not isinstance(body, str) or not body.strip():
         return False
-    page = int(session.get("scroll_page") or 0)
     _screen, _total, has_more = ussd_page(
         body,
         footer,
-        f"9. {t(language, 'more_text')}",
+        more_line,
         page=page,
-        continue_footer=f"0. {t(language, 'home')}",
+        continue_footer=continue_footer,
     )
     return has_more
 
@@ -445,12 +498,24 @@ def _advance_scroll(
     footer: str,
     language: str,
 ) -> PlainTextResponse | None:
-    """Handle ``9. More`` when scroll text is stored; else return ``None``."""
+    """Handle ``9. More`` when scroll text/verses are stored; else ``None``."""
+
+    page = int(session.get("scroll_page") or 0) + 1
+    verses = session.get("scroll_verses")
+    if isinstance(verses, list) and verses:
+        return _render_verse_scroll(
+            phone_number,
+            flow=flow,
+            heading=str(session.get("scroll_heading") or ""),
+            verses=verses,
+            footer=footer,
+            language=language,
+            page=page,
+        )
 
     body = session.get("scroll_text")
     if not isinstance(body, str) or not body.strip():
         return None
-    page = int(session.get("scroll_page") or 0) + 1
     return _render_scroll(
         phone_number,
         flow=flow,
@@ -476,8 +541,19 @@ def _stay_on_scroll_if_reading(
 
     if not _scroll_has_more(session, footer=footer, language=language):
         return None
-    body = str(session.get("scroll_text") or "")
     page = int(session.get("scroll_page") or 0)
+    verses = session.get("scroll_verses")
+    if isinstance(verses, list) and verses:
+        return _render_verse_scroll(
+            phone_number,
+            flow=flow,
+            heading=str(session.get("scroll_heading") or ""),
+            verses=verses,
+            footer=footer,
+            language=language,
+            page=page,
+        )
+    body = str(session.get("scroll_text") or "")
     return _render_scroll(
         phone_number,
         flow=flow,
@@ -504,11 +580,11 @@ def _open_verse_of_the_day(
         )
     except YouVersionError:
         return _ussd_response("END", t(language, "votd_unavailable"))
-    body = f"{detail['reference']}\n{detail['text']}"
-    return _render_scroll(
+    return _render_verse_scroll(
         phone_number,
         flow="votd",
-        body=body,
+        heading=str(detail.get("reference") or "Verse of the Day"),
+        verses=_verses_from_detail(detail),
         footer=_votd_action_footer(language),
         language=language,
         page=page,
@@ -604,6 +680,18 @@ def _bible_read_footer(language: str) -> str:
     )
 
 
+def _verses_from_detail(detail: dict[str, Any]) -> list[dict[str, Any]]:
+    """Prefer structured verses; fall back to plain text as verse 1."""
+
+    verses = list(detail.get("verses") or [])
+    if verses:
+        return verses
+    text = str(detail.get("text") or detail.get("text_numbered") or "").strip()
+    if text:
+        return [{"n": 1, "t": text}]
+    return []
+
+
 def _show_bible_chapter(
     phone_number: str,
     session: dict[str, Any],
@@ -617,18 +705,15 @@ def _show_bible_chapter(
     chapter = int(session.get("read_chapter") or 1)
     language = _lang(session)
     footer = _bible_read_footer(language)
-    if reuse_scroll and isinstance(session.get("scroll_text"), str):
-        return _render_scroll(
+    if reuse_scroll and isinstance(session.get("scroll_verses"), list):
+        return _render_verse_scroll(
             phone_number,
             flow="bible_read",
-            body=str(session["scroll_text"]),
+            heading=str(session.get("scroll_heading") or ""),
+            verses=list(session["scroll_verses"]),
             footer=footer,
             language=language,
             page=page,
-            reset_text=False,
-            scroll_text=session["scroll_text"],
-            scroll_page=page,
-            read_verse=1,
         )
 
     passage_id = chapter_passage_id(book, chapter)
@@ -638,15 +723,24 @@ def _show_bible_chapter(
         )
     except YouVersionError:
         return _ussd_response("END", t(language, "chapter_load_fail"))
-    body = f"{detail['reference']}\n{detail['text']}"
-    return _render_scroll(
+
+    verses = _verses_from_detail(detail)
+    start_verse = int(session.get("read_verse") or 1)
+    if start_verse > 1:
+        resumed = [row for row in verses if int(row.get("n") or 0) >= start_verse]
+        if resumed:
+            verses = resumed
+    heading = str(detail.get("reference") or f"{book_title(book)} {chapter}")
+    if start_verse > 1 and verses:
+        heading = f"{heading} · v{first_verse_number(verses)}"
+    return _render_verse_scroll(
         phone_number,
         flow="bible_read",
-        body=body,
+        heading=heading,
+        verses=verses,
         footer=footer,
         language=language,
         page=page,
-        read_verse=1,
     )
 
 
@@ -669,17 +763,15 @@ def _serve_plan_day(
             f"0. {t(language, 'home')}",
         ]
     )
-    if reuse_scroll and isinstance(session.get("scroll_text"), str):
-        return _render_scroll(
+    if reuse_scroll and isinstance(session.get("scroll_verses"), list):
+        return _render_verse_scroll(
             phone_number,
             flow="plan_close",
-            body=str(session["scroll_text"]),
+            heading=str(session.get("scroll_heading") or ""),
+            verses=list(session["scroll_verses"]),
             footer=footer,
             language=language,
             page=page,
-            reset_text=False,
-            scroll_text=session["scroll_text"],
-            scroll_page=page,
         )
 
     try:
@@ -698,13 +790,12 @@ def _serve_plan_day(
         plan_close_text=detail["text"],
     )
     label = plan_label(plan_id)
-    body = (
-        f"{label} D{day_number}/{total} {detail['reference']}: {detail['text']}"
-    )
-    return _render_scroll(
+    heading = f"{label} D{day_number}/{total} {detail['reference']}"
+    return _render_verse_scroll(
         phone_number,
         flow="plan_close",
-        body=body,
+        heading=heading,
+        verses=_verses_from_detail(detail),
         footer=footer,
         language=language,
         page=page,
@@ -1098,10 +1189,11 @@ def _handle_flow(
                 read_verse=1,
             )
             return _show_bible_chapter(phone_number, session)
-        return _render_scroll(
+        return _render_verse_scroll(
             phone_number,
             flow="votd",
-            body=f"{detail['reference']}\n{detail['text']}",
+            heading=str(detail.get("reference") or ""),
+            verses=_verses_from_detail(detail),
             footer=_votd_action_footer(language),
             language=language,
             page=0,
@@ -1274,6 +1366,8 @@ def _handle_flow(
                     read_chapter=chapter + 1,
                     read_verse=1,
                     scroll_text=None,
+                    scroll_verses=None,
+                    scroll_heading=None,
                     scroll_page=0,
                 )
                 return _show_bible_chapter(phone_number, session)
