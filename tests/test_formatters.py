@@ -41,13 +41,18 @@ def test_paginate_ussd_keeps_full_chapter_readable() -> None:
     body = "God is our refuge and strength. " * 40
     footer = "1. Next chapter\n2. Pray with me\n0. Home"
     more = "9. More"
-    pages = paginate_ussd(body, footer, more)
+    pages = paginate_ussd(
+        body, footer, more, continue_footer="0. Home"
+    )
 
     assert len(pages) > 1
     assert "9. More" in pages[0]
+    assert "Pray with me" not in pages[0]
+    assert "Next chapter" not in pages[0]
+    assert "0. Home" in pages[0]
     assert "9. More" not in pages[-1]
+    assert "Pray with me" in pages[-1]
     assert all(len(f"CON {page}") <= 182 for page in pages)
-    # Every word from the body should appear across the pages.
     joined = " ".join(pages)
     assert "refuge" in joined
     assert "strength" in joined
@@ -57,16 +62,30 @@ def test_ussd_page_advances_with_has_more_flag() -> None:
     """Page helper should report when more text remains."""
 
     body = " ".join(f"verse{n}" for n in range(80))
-    footer = "0. Home"
-    screen0, total, more0 = ussd_page(body, footer, "9. More", page=0)
-    screen1, total2, more1 = ussd_page(body, footer, "9. More", page=1)
+    footer = "1. Pray with me\n0. Home"
+    screen0, total, more0 = ussd_page(
+        body,
+        footer,
+        "9. More",
+        page=0,
+        continue_footer="0. Home",
+    )
+    screen1, total2, more1 = ussd_page(
+        body,
+        footer,
+        "9. More",
+        page=1,
+        continue_footer="0. Home",
+    )
 
     assert total == total2
     assert total >= 2
     assert more0 is True
     assert "9. More" in screen0
+    assert "Pray with me" not in screen0
     assert screen0 != screen1
     assert "verse0" in screen0
     if total == 2:
         assert more1 is False
         assert "9. More" not in screen1
+        assert "Pray with me" in screen1

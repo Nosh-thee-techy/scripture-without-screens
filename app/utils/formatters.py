@@ -72,14 +72,20 @@ def paginate_ussd(
     footer: str,
     more_line: str,
     *,
+    continue_footer: str | None = None,
     limit: int | None = None,
 ) -> list[str]:
     """Build CON-screen pages so long scripture can be read via ``More``.
 
+    While more text remains, each screen shows only ``more_line`` plus
+    ``continue_footer`` (typically Home). Action menus in ``footer`` appear
+    only on the final page.
+
     Args:
         body: Verse/chapter/explanation text (may be long).
-        footer: Menu lines always shown (e.g. next / pray / home).
+        footer: Full menu on the last page (e.g. next / pray / home).
         more_line: Line shown when another page remains (e.g. ``9. More``).
+        continue_footer: Menu under More while reading (default: empty → More only).
         limit: Max characters for the message body after ``CON ``.
 
     Returns:
@@ -94,16 +100,20 @@ def paginate_ussd(
     normalized = _normalize_body(body)
     footer = footer.strip("\n")
     more_line = more_line.strip()
+    mid_tail = more_line
+    if continue_footer and continue_footer.strip():
+        mid_tail = f"{more_line}\n{continue_footer.strip()}"
 
-    # Reserve space for More + footer on every chunk estimate; the last page
-    # drops More and can therefore show a bit more text.
-    reserved = len(more_line) + len(footer) + 2
+    # Size chunks so both mid (More+Home) and final (full menu) pages fit.
+    mid_reserved = len(mid_tail) + 1
+    last_reserved = len(footer) + 1
+    reserved = max(mid_reserved, last_reserved)
     chunk_size = max(24, content_limit - reserved)
     chunks = _chunk_words(normalized, chunk_size)
     pages: list[str] = []
     for index, chunk in enumerate(chunks):
         if index < len(chunks) - 1:
-            page = f"{chunk}\n{more_line}\n{footer}"
+            page = f"{chunk}\n{mid_tail}"
         else:
             page = f"{chunk}\n{footer}"
         # Hard safety: if a page still overruns (very long footer words), trim body.
@@ -111,7 +121,7 @@ def paginate_ussd(
             overflow = len(page) - content_limit
             trimmed = truncate_text(chunk, max(24, len(chunk) - overflow), suffix="")
             page = (
-                f"{trimmed}\n{more_line}\n{footer}"
+                f"{trimmed}\n{mid_tail}"
                 if index < len(chunks) - 1
                 else f"{trimmed}\n{footer}"
             )
@@ -125,6 +135,7 @@ def ussd_page(
     more_line: str,
     page: int = 0,
     *,
+    continue_footer: str | None = None,
     limit: int | None = None,
 ) -> tuple[str, int, bool]:
     """Return one paginated CON screen plus paging metadata.
@@ -133,7 +144,13 @@ def ussd_page(
         ``(screen_text, total_pages, has_more)``.
     """
 
-    pages = paginate_ussd(body, footer, more_line, limit=limit)
+    pages = paginate_ussd(
+        body,
+        footer,
+        more_line,
+        continue_footer=continue_footer,
+        limit=limit,
+    )
     total = len(pages)
     index = max(0, min(int(page), total - 1))
     has_more = index < total - 1

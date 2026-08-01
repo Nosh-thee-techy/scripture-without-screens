@@ -394,17 +394,47 @@ def _render_scroll(
     reset_text: bool = True,
     **session_fields: Any,
 ) -> PlainTextResponse:
-    """Show one page of long scripture/reflection with optional ``9. More``."""
+    """Show one page of long scripture/reflection with optional ``9. More``.
+
+    While More remains, only More + Home are shown. Full action menus in
+    ``footer`` appear on the final page of the reading.
+    """
 
     more_line = f"9. {t(language, 'more_text')}"
+    continue_footer = f"0. {t(language, 'home')}"
     if reset_text:
         session_fields["scroll_text"] = body
         session_fields["scroll_page"] = page
     else:
         session_fields.setdefault("scroll_page", page)
-    screen, _total, _has_more = ussd_page(body, footer, more_line, page=page)
+    screen, _total, _has_more = ussd_page(
+        body,
+        footer,
+        more_line,
+        page=page,
+        continue_footer=continue_footer,
+    )
     _set_flow(phone_number, flow, **session_fields)
     return _ussd_response("CON", screen)
+
+
+def _scroll_has_more(
+    session: dict[str, Any], *, footer: str, language: str
+) -> bool:
+    """True when the subscriber still has unread scroll pages."""
+
+    body = session.get("scroll_text")
+    if not isinstance(body, str) or not body.strip():
+        return False
+    page = int(session.get("scroll_page") or 0)
+    _screen, _total, has_more = ussd_page(
+        body,
+        footer,
+        f"9. {t(language, 'more_text')}",
+        page=page,
+        continue_footer=f"0. {t(language, 'home')}",
+    )
+    return has_more
 
 
 def _advance_scroll(
@@ -421,6 +451,33 @@ def _advance_scroll(
     if not isinstance(body, str) or not body.strip():
         return None
     page = int(session.get("scroll_page") or 0) + 1
+    return _render_scroll(
+        phone_number,
+        flow=flow,
+        body=body,
+        footer=footer,
+        language=language,
+        page=page,
+        reset_text=False,
+        scroll_text=body,
+        scroll_page=page,
+    )
+
+
+def _stay_on_scroll_if_reading(
+    phone_number: str,
+    session: dict[str, Any],
+    *,
+    flow: str,
+    footer: str,
+    language: str,
+) -> PlainTextResponse | None:
+    """Block action keys until the subscriber finishes reading (More gone)."""
+
+    if not _scroll_has_more(session, footer=footer, language=language):
+        return None
+    body = str(session.get("scroll_text") or "")
+    page = int(session.get("scroll_page") or 0)
     return _render_scroll(
         phone_number,
         flow=flow,
@@ -970,16 +1027,27 @@ def _handle_flow(
         passage_id = str(session.get("votd_passage_id") or "")
         if not passage_id:
             return _open_verse_of_the_day(phone_number, session)
+        votd_footer = _votd_action_footer(language)
         if action == "9":
             advanced = _advance_scroll(
                 phone_number,
                 session,
                 flow="votd",
-                footer=_votd_action_footer(language),
+                footer=votd_footer,
                 language=language,
             )
             if advanced is not None:
                 return advanced
+        if action in {"1", "2", "3"}:
+            blocked = _stay_on_scroll_if_reading(
+                phone_number,
+                session,
+                flow="votd",
+                footer=votd_footer,
+                language=language,
+            )
+            if blocked is not None:
+                return blocked
         try:
             detail = get_passage_detail(
                 passage_id, language=language, bible_id=session.get("bible_id")
@@ -1168,12 +1236,13 @@ def _handle_flow(
         language = _lang(session)
         book = str(session.get("read_book") or "GEN")
         chapter = int(session.get("read_chapter") or 1)
+        bible_footer = _bible_read_footer(language)
         if action == "9":
             advanced = _advance_scroll(
                 phone_number,
                 session,
                 flow="bible_read",
-                footer=_bible_read_footer(language),
+                footer=bible_footer,
                 language=language,
             )
             if advanced is not None:
@@ -1181,6 +1250,16 @@ def _handle_flow(
             return _show_bible_chapter(
                 phone_number, session, page=1, reuse_scroll=False
             )
+        if action in {"1", "2"}:
+            blocked = _stay_on_scroll_if_reading(
+                phone_number,
+                session,
+                flow="bible_read",
+                footer=bible_footer,
+                language=language,
+            )
+            if blocked is not None:
+                return blocked
         if action == "1":
             try:
                 total_chapters = get_book_chapter_count(
@@ -1246,22 +1325,32 @@ def _handle_flow(
 
     if flow == "plan_close":
         language = _lang(session)
+        plan_footer = "\n".join(
+            [
+                f"1. {t(language, 'pray_option')}",
+                f"0. {t(language, 'home')}",
+            ]
+        )
         if action == "9":
-            footer = "\n".join(
-                [
-                    f"1. {t(language, 'pray_option')}",
-                    f"0. {t(language, 'home')}",
-                ]
-            )
             advanced = _advance_scroll(
                 phone_number,
                 session,
                 flow="plan_close",
-                footer=footer,
+                footer=plan_footer,
                 language=language,
             )
             if advanced is not None:
                 return advanced
+        if action == "1":
+            blocked = _stay_on_scroll_if_reading(
+                phone_number,
+                session,
+                flow="plan_close",
+                footer=plan_footer,
+                language=language,
+            )
+            if blocked is not None:
+                return blocked
         if action == "1":
             reference = str(session.get("plan_close_ref") or "")
             text = str(session.get("plan_close_text") or "")
