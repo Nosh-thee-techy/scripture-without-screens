@@ -52,7 +52,7 @@ from app.services.youversion_client import (
     prefer_bible_id,
     warm_bibles_for_language,
 )
-from app.utils.formatters import format_for_ussd
+from app.utils.formatters import format_for_ussd, ussd_page
 from app.utils.i18n import (
     LANGUAGE_NATIVE_LABELS,
     category_name,
@@ -370,21 +370,72 @@ def _apply_language(
     )
 
 
-def _votd_options_menu(reference: str, text: str, language: str) -> str:
-    """Show today's verse with citation and follow-up actions."""
+def _votd_action_footer(language: str) -> str:
+    """Menu keys under Verse of the Day / explain / pray screens."""
 
-    body = format_for_ussd(f"{reference}\n{text}")
-    return (
-        f"{body}\n"
-        f"1. {t(language, 'votd_explain')}\n"
-        f"2. {t(language, 'votd_pray')}\n"
-        f"3. {t(language, 'votd_chapter')}\n"
-        f"{nav_footer(language)}"
+    return "\n".join(
+        [
+            f"1. {t(language, 'votd_explain')}",
+            f"2. {t(language, 'votd_pray')}",
+            f"3. {t(language, 'votd_chapter')}",
+            nav_footer(language),
+        ]
+    )
+
+
+def _render_scroll(
+    phone_number: str,
+    *,
+    flow: str,
+    body: str,
+    footer: str,
+    language: str,
+    page: int = 0,
+    reset_text: bool = True,
+    **session_fields: Any,
+) -> PlainTextResponse:
+    """Show one page of long scripture/reflection with optional ``9. More``."""
+
+    more_line = f"9. {t(language, 'more_text')}"
+    if reset_text:
+        session_fields["scroll_text"] = body
+        session_fields["scroll_page"] = page
+    else:
+        session_fields.setdefault("scroll_page", page)
+    screen, _total, _has_more = ussd_page(body, footer, more_line, page=page)
+    _set_flow(phone_number, flow, **session_fields)
+    return _ussd_response("CON", screen)
+
+
+def _advance_scroll(
+    phone_number: str,
+    session: dict[str, Any],
+    *,
+    flow: str,
+    footer: str,
+    language: str,
+) -> PlainTextResponse | None:
+    """Handle ``9. More`` when scroll text is stored; else return ``None``."""
+
+    body = session.get("scroll_text")
+    if not isinstance(body, str) or not body.strip():
+        return None
+    page = int(session.get("scroll_page") or 0) + 1
+    return _render_scroll(
+        phone_number,
+        flow=flow,
+        body=body,
+        footer=footer,
+        language=language,
+        page=page,
+        reset_text=False,
+        scroll_text=body,
+        scroll_page=page,
     )
 
 
 def _open_verse_of_the_day(
-    phone_number: str, session: dict[str, Any]
+    phone_number: str, session: dict[str, Any], *, page: int = 0
 ) -> PlainTextResponse:
     """Load YouVersion's VOTD with citation into a continuing menu."""
 
@@ -396,14 +447,15 @@ def _open_verse_of_the_day(
         )
     except YouVersionError:
         return _ussd_response("END", t(language, "votd_unavailable"))
-    _set_flow(
+    body = f"{detail['reference']}\n{detail['text']}"
+    return _render_scroll(
         phone_number,
-        "votd",
+        flow="votd",
+        body=body,
+        footer=_votd_action_footer(language),
+        language=language,
+        page=page,
         votd_passage_id=detail["passage_id"],
-    )
-    return _ussd_response(
-        "CON",
-        _votd_options_menu(detail["reference"], detail["text"], language),
     )
 
 
@@ -483,14 +535,45 @@ def _chapters_menu(session: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _bible_read_footer(language: str) -> str:
+    """Actions under a chapter page."""
+
+    return "\n".join(
+        [
+            f"1. {t(language, 'next_chapter')}",
+            f"2. {t(language, 'pray_option')}",
+            f"0. {t(language, 'home')}",
+        ]
+    )
+
+
 def _show_bible_chapter(
-    phone_number: str, session: dict[str, Any]
+    phone_number: str,
+    session: dict[str, Any],
+    *,
+    page: int = 0,
+    reuse_scroll: bool = False,
 ) -> PlainTextResponse:
-    """Display a whole chapter, then next-chapter / Home choices."""
+    """Display a chapter in USSD pages (press 9 for More)."""
 
     book = str(session.get("read_book") or "GEN")
     chapter = int(session.get("read_chapter") or 1)
     language = _lang(session)
+    footer = _bible_read_footer(language)
+    if reuse_scroll and isinstance(session.get("scroll_text"), str):
+        return _render_scroll(
+            phone_number,
+            flow="bible_read",
+            body=str(session["scroll_text"]),
+            footer=footer,
+            language=language,
+            page=page,
+            reset_text=False,
+            scroll_text=session["scroll_text"],
+            scroll_page=page,
+            read_verse=1,
+        )
+
     passage_id = chapter_passage_id(book, chapter)
     try:
         detail = get_passage_detail(
@@ -498,26 +581,50 @@ def _show_bible_chapter(
         )
     except YouVersionError:
         return _ussd_response("END", t(language, "chapter_load_fail"))
-    _set_flow(phone_number, "bible_read", read_verse=1)
-    body = format_for_ussd(f"{detail['reference']}\n{detail['text']}")
-    return _ussd_response(
-        "CON",
-        f"{body}\n"
-        f"1. {t(language, 'next_chapter')}\n"
-        f"2. {t(language, 'pray_option')}\n"
-        f"0. {t(language, 'home')}",
+    body = f"{detail['reference']}\n{detail['text']}"
+    return _render_scroll(
+        phone_number,
+        flow="bible_read",
+        body=body,
+        footer=footer,
+        language=language,
+        page=page,
+        read_verse=1,
     )
 
 
 def _serve_plan_day(
-    phone_number: str, session: dict[str, Any]
+    phone_number: str,
+    session: dict[str, Any],
+    *,
+    page: int = 0,
+    reuse_scroll: bool = False,
 ) -> PlainTextResponse:
-    """Serve today's plan passage, then offer a short prayer."""
+    """Serve today's plan passage in pages, then offer a short prayer."""
 
     plan_id = str(session.get("plan_id") or "hope-kenya")
     day_number = int(session.get("plan_day") or 1)
     total = plan_day_count(plan_id)
     language = _lang(session)
+    footer = "\n".join(
+        [
+            f"1. {t(language, 'pray_option')}",
+            f"0. {t(language, 'home')}",
+        ]
+    )
+    if reuse_scroll and isinstance(session.get("scroll_text"), str):
+        return _render_scroll(
+            phone_number,
+            flow="plan_close",
+            body=str(session["scroll_text"]),
+            footer=footer,
+            language=language,
+            page=page,
+            reset_text=False,
+            scroll_text=session["scroll_text"],
+            scroll_page=page,
+        )
+
     try:
         reference = get_plan_reference(plan_id, day_number)
         detail = get_passage_detail(
@@ -534,15 +641,16 @@ def _serve_plan_day(
         plan_close_text=detail["text"],
     )
     label = plan_label(plan_id)
-    body = format_for_ussd(
+    body = (
         f"{label} D{day_number}/{total} {detail['reference']}: {detail['text']}"
     )
-    _set_flow(phone_number, "plan_close")
-    return _ussd_response(
-        "CON",
-        f"{body}\n"
-        f"1. {t(language, 'pray_option')}\n"
-        f"0. {t(language, 'home')}",
+    return _render_scroll(
+        phone_number,
+        flow="plan_close",
+        body=body,
+        footer=footer,
+        language=language,
+        page=page,
     )
 
 
@@ -862,6 +970,16 @@ def _handle_flow(
         passage_id = str(session.get("votd_passage_id") or "")
         if not passage_id:
             return _open_verse_of_the_day(phone_number, session)
+        if action == "9":
+            advanced = _advance_scroll(
+                phone_number,
+                session,
+                flow="votd",
+                footer=_votd_action_footer(language),
+                language=language,
+            )
+            if advanced is not None:
+                return advanced
         try:
             detail = get_passage_detail(
                 passage_id, language=language, bible_id=session.get("bible_id")
@@ -870,27 +988,35 @@ def _handle_flow(
             return _ussd_response("END", t(language, "verse_unavailable"))
         if action == "1":
             explanation = explain_scripture(
-                detail["reference"], detail["text"], language=language
+                detail["reference"],
+                detail["text"],
+                language=language,
+                max_chars=600,
             )
-            return _ussd_response(
-                "CON",
-                f"{format_for_ussd(explanation)}\n"
-                f"1. {t(language, 'votd_explain_again')}\n"
-                f"2. {t(language, 'votd_pray')}\n"
-                f"3. {t(language, 'votd_chapter')}\n"
-                f"{nav_footer(language)}",
+            return _render_scroll(
+                phone_number,
+                flow="votd",
+                body=explanation,
+                footer=_votd_action_footer(language),
+                language=language,
+                page=0,
+                votd_passage_id=passage_id,
             )
         if action == "2":
             prayer = write_prayer(
-                detail["reference"], detail["text"], language=language
+                detail["reference"],
+                detail["text"],
+                language=language,
+                max_chars=600,
             )
-            return _ussd_response(
-                "CON",
-                f"{format_for_ussd(prayer)}\n"
-                f"1. {t(language, 'votd_explain')}\n"
-                f"2. {t(language, 'votd_pray_again')}\n"
-                f"3. {t(language, 'votd_chapter')}\n"
-                f"{nav_footer(language)}",
+            return _render_scroll(
+                phone_number,
+                flow="votd",
+                body=prayer,
+                footer=_votd_action_footer(language),
+                language=language,
+                page=0,
+                votd_passage_id=passage_id,
             )
         if action == "3":
             book, chapter, _verse = parse_usfm(passage_id)
@@ -904,9 +1030,14 @@ def _handle_flow(
                 read_verse=1,
             )
             return _show_bible_chapter(phone_number, session)
-        return _ussd_response(
-            "CON",
-            _votd_options_menu(detail["reference"], detail["text"], language),
+        return _render_scroll(
+            phone_number,
+            flow="votd",
+            body=f"{detail['reference']}\n{detail['text']}",
+            footer=_votd_action_footer(language),
+            language=language,
+            page=0,
+            votd_passage_id=passage_id,
         )
 
     if flow == "bible_root":
@@ -1033,10 +1164,23 @@ def _handle_flow(
         return _show_bible_chapter(phone_number, session)
 
     if flow == "bible_read":
-        # Whole-chapter reading: 1 = next chapter, 2 = pray, 0 = Home (nav).
+        # Chapter reading: 9 = More text, 1 = next chapter, 2 = pray, 0 = Home.
         language = _lang(session)
         book = str(session.get("read_book") or "GEN")
         chapter = int(session.get("read_chapter") or 1)
+        if action == "9":
+            advanced = _advance_scroll(
+                phone_number,
+                session,
+                flow="bible_read",
+                footer=_bible_read_footer(language),
+                language=language,
+            )
+            if advanced is not None:
+                return advanced
+            return _show_bible_chapter(
+                phone_number, session, page=1, reuse_scroll=False
+            )
         if action == "1":
             try:
                 total_chapters = get_book_chapter_count(
@@ -1050,6 +1194,8 @@ def _handle_flow(
                     "bible_read",
                     read_chapter=chapter + 1,
                     read_verse=1,
+                    scroll_text=None,
+                    scroll_page=0,
                 )
                 return _show_bible_chapter(phone_number, session)
             _set_flow(phone_number, "main")
@@ -1068,13 +1214,24 @@ def _handle_flow(
             except YouVersionError:
                 return _ussd_response("END", t(language, "chapter_load_fail"))
             prayer = write_prayer(
-                detail["reference"], detail["text"], language=language
+                detail["reference"],
+                detail["text"],
+                language=language,
+                max_chars=600,
             )
-            return _ussd_response(
-                "CON",
-                f"{format_for_ussd(prayer)}\n"
-                f"1. {t(language, 'next_chapter')}\n"
-                f"0. {t(language, 'home')}",
+            footer = "\n".join(
+                [
+                    f"1. {t(language, 'next_chapter')}",
+                    f"0. {t(language, 'home')}",
+                ]
+            )
+            return _render_scroll(
+                phone_number,
+                flow="bible_read",
+                body=prayer,
+                footer=footer,
+                language=language,
+                page=0,
             )
         return _show_bible_chapter(phone_number, session)
 
@@ -1089,10 +1246,28 @@ def _handle_flow(
 
     if flow == "plan_close":
         language = _lang(session)
+        if action == "9":
+            footer = "\n".join(
+                [
+                    f"1. {t(language, 'pray_option')}",
+                    f"0. {t(language, 'home')}",
+                ]
+            )
+            advanced = _advance_scroll(
+                phone_number,
+                session,
+                flow="plan_close",
+                footer=footer,
+                language=language,
+            )
+            if advanced is not None:
+                return advanced
         if action == "1":
             reference = str(session.get("plan_close_ref") or "")
             text = str(session.get("plan_close_text") or "")
-            prayer = write_prayer(reference, text, language=language)
+            prayer = write_prayer(
+                reference, text, language=language, max_chars=600
+            )
             _set_flow(phone_number, "main")
             return _ussd_response(
                 "END",
