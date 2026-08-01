@@ -69,24 +69,87 @@ body {
   font-size: 1.05rem;
 }
 
-.brand__video {
-  margin: 1rem 0 0;
+.video-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin: 1.25rem 0 0;
 }
 
-.brand__video a,
-.coach__video a {
+.video-links--coach {
+  justify-content: stretch;
+  margin-top: 1.35rem;
+}
+
+.video-links--coach .video-btn {
+  flex: 1 1 10rem;
+}
+
+.video-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  min-width: 11.5rem;
+  padding: 0.7rem 1rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--moss) 45%, transparent);
+  border-radius: 10px;
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--leaf) 55%, #1a2217) 0%,
+      color-mix(in srgb, var(--soil) 88%, #0e120f) 100%
+    );
   color: var(--paper);
-  font-weight: 600;
-  text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--accent) 80%, transparent);
-  text-underline-offset: 0.22em;
-  transition: color 0.2s ease, text-decoration-color 0.2s ease;
+  text-decoration: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease;
 }
 
-.brand__video a:hover,
-.coach__video a:hover {
-  color: #fff;
-  text-decoration-color: var(--accent);
+.video-btn--primary {
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--accent) 72%, #8a3a14) 0%,
+      color-mix(in srgb, var(--accent) 40%, #2a1810) 100%
+    );
+}
+
+.video-btn:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--sand) 55%, transparent);
+}
+
+.video-btn--primary:hover {
+  border-color: color-mix(in srgb, var(--paper) 50%, var(--accent));
+}
+
+.video-btn:active {
+  transform: translateY(0);
+}
+
+.video-btn__label {
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.video-btn__meta {
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--sand) 78%, transparent);
+}
+
+.video-btn--primary .video-btn__meta {
+  color: color-mix(in srgb, var(--paper) 82%, transparent);
 }
 
 .demo {
@@ -431,11 +494,6 @@ body {
   font-family: var(--font-mono);
   font-size: 0.85rem;
   color: var(--moss);
-}
-
-.coach__video {
-  margin: 1.25rem 0 0;
-  font-size: 0.95rem;
 }
 
 .hidden {
