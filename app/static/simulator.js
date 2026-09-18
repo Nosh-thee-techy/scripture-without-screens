@@ -1,9 +1,9 @@
 /**
- * Feature-phone USSD / SMS demo client.
+ * Feature-phone USSD / SMS preview client.
  *
  * USSD mimics Africa's Talking callbacks: cumulative asterisk-delimited `text`,
  * plus sessionId / phoneNumber / serviceCode form fields against POST /ussd.
- * SMS uses POST /demo/sms so judges see the reflection without sending credits.
+ * SMS uses POST /demo/sms so the reflection can be previewed without SMS credits.
  */
 
 const SERVICE_CODE = "*384*51567#";
@@ -67,7 +67,7 @@ function newSessionId() {
 }
 
 /**
- * Switch the demo between USSD dialing and SMS mood preview.
+ * Switch between USSD dialing and SMS mood preview.
  *
  * @param {"ussd"|"sms"} next Channel to show.
  */

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Scripture Without Screens — Feature Phone Demo</title>
+    <title>Scripture Without Screens</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -19,31 +19,11 @@
       <header class="brand">
         <p class="brand__mark">Scripture Without Screens</p>
         <p class="brand__line">
-          Feature-phone demo · live USSD and SMS against your backend
+          Bible access on feature phones — USSD, SMS, voice, and WhatsApp
         </p>
-        <div class="video-links" aria-label="Project videos">
-          <a
-            class="video-btn video-btn--primary"
-            href="https://www.youtube.com/watch?v=5w78qcDL4t8"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <span class="video-btn__label">SWS explanation</span>
-            <span class="video-btn__meta">Main demo video</span>
-          </a>
-          <a
-            class="video-btn"
-            href="https://www.youtube.com/watch?v=LGMU4o5OtBo"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <span class="video-btn__label">WhatsApp walkthrough</span>
-            <span class="video-btn__meta">Watch on YouTube</span>
-          </a>
-        </div>
       </header>
 
-      <section class="demo" aria-label="Feature phone simulator">
+      <section class="preview" aria-label="Feature phone preview">
         <div class="phone" id="phone">
           <div class="phone__ear"></div>
           <div class="phone__screen">
@@ -110,8 +90,8 @@
           </div>
         </div>
 
-        <aside class="coach">
-          <div class="channel-toggle" role="tablist" aria-label="Demo channel">
+        <aside class="guide">
+          <div class="channel-toggle" role="tablist" aria-label="Channel">
             <button
               type="button"
               class="channel-toggle__btn is-active"
@@ -131,39 +111,26 @@
           </div>
 
           <div id="coachUssd">
-            <h2>Judge demo flow</h2>
-            <ol>
-              <li>Press <strong>Call</strong> — dials <code>*384*51567#</code></li>
-              <li>First dial: welcome → pick language (saved in Redis)</li>
-              <li>
-                <strong>1</strong> Verse of the Day → cite + explain / pray /
-                read chapter
-              </li>
-              <li>
-                <strong>2</strong> Read My Bible → OT/NT → book → chapter → next chapter
-              </li>
-              <li>
-                <strong>3</strong> Reading Plan → topic → plan → day
-              </li>
-              <li>
-                <strong>4</strong> Kids: VOTD (explain/pray/affirm) · Stories · Plans
-              </li>
-              <li>
-                Nested screens: <strong>8</strong> Change Language,
-                <strong>0</strong> Home
-              </li>
-            </ol>
-            <p class="coach__note">
-              This UI talks to your live <code>POST /ussd</code> backend. Farmers
-              and kids still use a real phone — judges see it here.
+            <h2>Try USSD</h2>
+            <p class="guide__lead">
+              Dial the short code on the handset. Your language and reading
+              progress stay with the number.
             </p>
+            <ol>
+              <li>Press <strong>Call</strong> to dial <code>*384*51567#</code></li>
+              <li>Choose a language on first use</li>
+              <li><strong>1</strong> Verse of the Day</li>
+              <li><strong>2</strong> Read My Bible</li>
+              <li><strong>3</strong> Reading Plan</li>
+              <li><strong>4</strong> Kids Corner</li>
+              <li><strong>8</strong> Change language · <strong>0</strong> Home</li>
+            </ol>
           </div>
 
           <div id="coachSms" class="hidden">
-            <h2>Mood SMS</h2>
-            <p class="coach__note" style="margin-top: 0">
-              Tap a mood. The phone shows the same reflection body a farmer would
-              receive — powered by Featherless (or Gloo) + YouVersion.
+            <h2>Try SMS</h2>
+            <p class="guide__lead">
+              Pick a mood to preview the reflection a subscriber would receive.
             </p>
             <div class="mood-row">
               <button type="button" class="mood-btn" data-mood="STRESSED">STRESSED</button>
@@ -172,28 +139,24 @@
             </div>
           </div>
 
-          <div class="video-links video-links--coach" aria-label="Project videos">
+          <nav class="watch" aria-label="Videos">
             <a
-              class="video-btn video-btn--primary"
               href="https://www.youtube.com/watch?v=5w78qcDL4t8"
               target="_blank"
               rel="noopener noreferrer"
             >
-              <span class="video-btn__label">SWS explanation</span>
-              <span class="video-btn__meta">Main demo</span>
+              Product overview
             </a>
             <a
-              class="video-btn"
               href="https://www.youtube.com/watch?v=LGMU4o5OtBo"
               target="_blank"
               rel="noopener noreferrer"
             >
-              <span class="video-btn__label">WhatsApp video</span>
-              <span class="video-btn__meta">YouTube</span>
+              WhatsApp walkthrough
             </a>
-          </div>
+          </nav>
 
-          <p class="coach__status" id="connStatus">Connecting…</p>
+          <p class="guide__status" id="connStatus">Connecting…</p>
         </aside>
       </section>
     </main>

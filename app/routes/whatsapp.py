@@ -535,9 +535,11 @@ def _handle_main(phone: str, session: dict[str, Any], action: str) -> str:
         "EN": "en",
         "SW": "sw",
         "KISWAHILI": "sw",
-        "KLN": "kln",
         "KI": "ki",
         "LUO": "luo",
+        "GAX": "gax",
+        "BORANA": "gax",
+        "OROM": "gax",
     }
     if upper in lang_aliases:
         code = lang_aliases[upper]

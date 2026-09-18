@@ -90,11 +90,11 @@ def demo_sms_preview(
 ) -> PlainTextResponse:
     """Preview an SMS reflection without sending via Africa's Talking.
 
-    Used by the feature-phone judge UI so reflections can be shown on-screen
+    Used by the feature-phone preview UI so reflections can be shown on-screen
     without consuming sandbox SMS credits.
 
     Args:
-        from_number: Demo MSISDN used to load Redis preferences.
+        from_number: Preview MSISDN used to load Redis preferences.
         text: Mood word or free text, same as the live ``/sms`` webhook.
 
     Returns:

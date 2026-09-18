@@ -49,11 +49,10 @@ VOICE_MENU = (
 
 VOICE_LANG_MENU = (
     "Welcome! Choose your language. "
-    "Press 1 for English. "
-    "Press 2 for Swahili. "
-    "Press 3 for Kalenjin. "
-    "Press 4 for Kikuyu. "
-    "Press 5 for Dholuo."
+    + " ".join(
+        f"Press {index} for {label}."
+        for index, (_code, label) in enumerate(SUPPORTED_LANGUAGES, start=1)
+    )
 )
 
 

@@ -549,7 +549,8 @@ def test_ussd_change_language_from_main_persists() -> None:
         },
     )
     assert "Choose language" in menu.text
-    assert "Kalenjin" in menu.text
+    assert "Gĩkũyũ" in menu.text
+    assert "Borana" in menu.text
 
     confirm = client.post(
         "/ussd",
@@ -561,10 +562,9 @@ def test_ussd_change_language_from_main_persists() -> None:
         },
     )
     assert confirm.status_code == 200
-    assert "Kalenjin" in confirm.text
-    assert get_user_session(phone)["language"] == "kln"
-    # Localized main menu returns in the same response (no YouVersion wait).
-    assert "Kigoyanab kee" in confirm.text or "Change Language" not in confirm.text
+    assert get_user_session(phone)["language"] == "ki"
+    # Localized Kikuyu main menu returns in the same response (no YouVersion wait).
+    assert "Ciugo cia" in confirm.text or "Garũra rũthiomi" in confirm.text
 
 
 def test_ussd_kids_corner_section_and_home(monkeypatch: Any) -> None:
@@ -806,7 +806,7 @@ def test_sms_mood_sends_personalized_reply(monkeypatch: Any) -> None:
 
 
 def test_demo_sms_returns_reflection_body(monkeypatch: Any) -> None:
-    """Ensure the judge SMS preview returns the message without sending."""
+    """Ensure the SMS preview returns the message without sending."""
 
     monkeypatch.setattr(
         "app.routes.sms.get_verse_of_the_day",

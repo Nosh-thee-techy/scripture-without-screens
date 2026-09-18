@@ -105,8 +105,8 @@ def on_shutdown() -> None:
 
 
 @app.get("/")
-def feature_phone_demo() -> FileResponse:
-    """Serve the judge-facing feature-phone USSD simulator.
+def feature_phone_preview() -> FileResponse:
+    """Serve the feature-phone USSD / SMS preview.
 
     Returns:
         The HTML page that dials the live ``/ussd`` webhook.

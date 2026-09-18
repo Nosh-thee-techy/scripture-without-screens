@@ -1,14 +1,15 @@
 :root {
-  --soil: #1c2418;
-  --leaf: #2f4a32;
-  --moss: #6f8f5c;
-  --sand: #e7e0d2;
-  --paper: #f7f3ea;
-  --ink: #142016;
-  --accent: #c45c26;
-  --glow: rgba(111, 143, 92, 0.35);
-  --phone: #0e120f;
-  --key: #232a21;
+  --soil: #141c16;
+  --leaf: #2a3f2e;
+  --moss: #7a9a68;
+  --sand: #d8e0d2;
+  --paper: #eef2e8;
+  --ink: #121a14;
+  --accent: #3d6b4f;
+  --accent-warm: #b86a3a;
+  --glow: rgba(122, 154, 104, 0.28);
+  --phone: #0c100d;
+  --key: #1e261f;
   --font-display: "Fraunces", Georgia, serif;
   --font-ui: "Source Sans 3", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
@@ -35,146 +36,66 @@ body {
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(ellipse 80% 50% at 20% 10%, rgba(196, 92, 38, 0.22), transparent 55%),
-    radial-gradient(ellipse 70% 60% at 90% 80%, rgba(111, 143, 92, 0.28), transparent 50%),
-    linear-gradient(160deg, #12180f 0%, #243522 45%, #1a2217 100%);
+    radial-gradient(ellipse 70% 45% at 15% 0%, rgba(61, 107, 79, 0.35), transparent 55%),
+    radial-gradient(ellipse 55% 50% at 95% 85%, rgba(20, 40, 28, 0.9), transparent 45%),
+    linear-gradient(165deg, #0e140f 0%, #1a261c 42%, #121812 100%);
   z-index: -1;
 }
 
 .stage {
-  width: min(1100px, calc(100% - 2rem));
+  width: min(1040px, calc(100% - 2rem));
   margin: 0 auto;
-  padding: 2.5rem 0 3rem;
+  padding: 2.75rem 0 3.5rem;
 }
 
 .brand {
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 2.25rem;
   animation: rise 0.8s ease both;
 }
 
 .brand__mark {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(2rem, 5vw, 3.4rem);
+  font-size: clamp(2.1rem, 5.2vw, 3.5rem);
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   line-height: 1.05;
-  color: var(--paper);
+  color: #f2f6ee;
 }
 
 .brand__line {
-  margin: 0.75rem 0 0;
-  color: color-mix(in srgb, var(--sand) 75%, transparent);
-  font-size: 1.05rem;
-}
-
-.video-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  justify-content: center;
-  margin: 1.25rem 0 0;
-}
-
-.video-links--coach {
-  justify-content: stretch;
-  margin-top: 1.35rem;
-}
-
-.video-links--coach .video-btn {
-  flex: 1 1 10rem;
-}
-
-.video-btn {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.15rem;
-  min-width: 11.5rem;
-  padding: 0.7rem 1rem 0.75rem;
-  border: 1px solid color-mix(in srgb, var(--moss) 45%, transparent);
-  border-radius: 10px;
-  background:
-    linear-gradient(
-      165deg,
-      color-mix(in srgb, var(--leaf) 55%, #1a2217) 0%,
-      color-mix(in srgb, var(--soil) 88%, #0e120f) 100%
-    );
-  color: var(--paper);
-  text-decoration: none;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  transition:
-    transform 0.18s ease,
-    border-color 0.18s ease,
-    background 0.18s ease;
-}
-
-.video-btn--primary {
-  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
-  background:
-    linear-gradient(
-      165deg,
-      color-mix(in srgb, var(--accent) 72%, #8a3a14) 0%,
-      color-mix(in srgb, var(--accent) 40%, #2a1810) 100%
-    );
-}
-
-.video-btn:hover {
-  transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--sand) 55%, transparent);
-}
-
-.video-btn--primary:hover {
-  border-color: color-mix(in srgb, var(--paper) 50%, var(--accent));
-}
-
-.video-btn:active {
-  transform: translateY(0);
-}
-
-.video-btn__label {
-  font-family: var(--font-display);
-  font-size: 1.02rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
-}
-
-.video-btn__meta {
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  margin: 0.85rem auto 0;
+  max-width: 34rem;
   color: color-mix(in srgb, var(--sand) 78%, transparent);
+  font-size: 1.08rem;
+  line-height: 1.45;
 }
 
-.video-btn--primary .video-btn__meta {
-  color: color-mix(in srgb, var(--paper) 82%, transparent);
-}
-
-.demo {
+.preview {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) 1fr;
-  gap: 2.5rem;
+  grid-template-columns: minmax(280px, 320px) 1fr;
+  gap: 2.75rem;
   align-items: center;
   justify-content: center;
 }
 
 @media (max-width: 820px) {
-  .demo {
+  .preview {
     grid-template-columns: 1fr;
     justify-items: center;
+    gap: 2rem;
   }
 }
 
 .phone {
   width: min(100%, 320px);
-  background: linear-gradient(180deg, #1a211b 0%, var(--phone) 40%, #080a08 100%);
+  background: linear-gradient(180deg, #1a221b 0%, var(--phone) 42%, #070907 100%);
   border-radius: 28px;
   padding: 1rem 1rem 1.15rem;
   box-shadow:
-    0 30px 60px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 28px 56px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   animation: phone-in 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
@@ -187,12 +108,12 @@ body {
 }
 
 .phone__screen {
-  background: linear-gradient(180deg, #dfe8d4 0%, #cfdabf 100%);
+  background: linear-gradient(180deg, #d7e0cc 0%, #c8d4bc 100%);
   color: var(--ink);
   border-radius: 10px;
   min-height: 230px;
   padding: 0.55rem 0.65rem 0.75rem;
-  box-shadow: inset 0 0 0 2px #8fa681;
+  box-shadow: inset 0 0 0 2px #87a07a;
   position: relative;
   overflow: hidden;
 }
@@ -239,10 +160,10 @@ body {
 
 .ussd {
   background: var(--paper);
-  border: 1px solid #b7b0a0;
+  border: 1px solid #aeb8a4;
   border-radius: 4px;
   padding: 0.7rem 0.7rem 0.55rem;
-  box-shadow: 0 10px 24px rgba(20, 32, 22, 0.18);
+  box-shadow: 0 10px 24px rgba(18, 26, 20, 0.16);
   animation: ussd-pop 0.35s cubic-bezier(0.2, 0.9, 0.2, 1) both;
 }
 
@@ -259,7 +180,7 @@ body {
 .ussd__input {
   width: 100%;
   border: none;
-  border-bottom: 1px solid #9a9385;
+  border-bottom: 1px solid #8f9986;
   background: transparent;
   font-family: var(--font-mono);
   font-size: 1rem;
@@ -288,13 +209,13 @@ body {
 }
 
 .ussd__btn--primary {
-  color: #9a3d12;
+  color: #2a5238;
 }
 
 .toast {
   position: absolute;
   inset: auto 0.4rem 0.4rem;
-  background: rgba(20, 32, 22, 0.92);
+  background: rgba(18, 26, 20, 0.92);
   color: var(--paper);
   font-size: 0.75rem;
   padding: 0.55rem 0.65rem;
@@ -314,7 +235,7 @@ body {
   border: none;
   border-radius: 999px;
   min-height: 46px;
-  background: radial-gradient(circle at 30% 25%, #2d352b, var(--key));
+  background: radial-gradient(circle at 30% 25%, #2b342a, var(--key));
   color: var(--sand);
   font-family: var(--font-mono);
   font-size: 1.15rem;
@@ -353,7 +274,7 @@ body {
 }
 
 .soft--clear {
-  background: #2a3228;
+  background: #262e25;
   color: var(--sand);
 }
 
@@ -365,7 +286,7 @@ body {
 }
 
 .soft--end {
-  background: linear-gradient(180deg, #b85a3c, #7a2f1d);
+  background: linear-gradient(180deg, #a8583c, #6e2c1c);
   color: #ffe8df;
 }
 
@@ -383,7 +304,7 @@ body {
 
 .sms-bubble {
   background: var(--paper);
-  border: 1px solid #b7b0a0;
+  border: 1px solid #aeb8a4;
   border-radius: 4px 12px 12px 12px;
   padding: 0.7rem;
   font-family: var(--font-mono);
@@ -392,7 +313,7 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
   min-height: 6rem;
-  box-shadow: 0 8px 18px rgba(20, 32, 22, 0.16);
+  box-shadow: 0 8px 18px rgba(18, 26, 20, 0.14);
   animation: ussd-pop 0.35s cubic-bezier(0.2, 0.9, 0.2, 1) both;
 }
 
@@ -400,11 +321,11 @@ body {
   display: inline-grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.35rem;
-  margin-bottom: 1.1rem;
+  margin-bottom: 1.15rem;
   padding: 0.25rem;
-  border: 1px solid color-mix(in srgb, var(--sand) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sand) 22%, transparent);
   border-radius: 10px;
-  background: rgba(8, 12, 8, 0.35);
+  background: rgba(8, 12, 8, 0.4);
 }
 
 .channel-toggle__btn {
@@ -421,22 +342,22 @@ body {
 }
 
 .channel-toggle__btn.is-active {
-  background: color-mix(in srgb, var(--moss) 55%, #1a2418);
-  color: var(--paper);
+  background: color-mix(in srgb, var(--accent) 55%, #1a2418);
+  color: #f2f6ee;
 }
 
 .mood-row {
   display: flex;
   flex-wrap: wrap;
   gap: 0.55rem;
-  margin-top: 1rem;
+  margin-top: 0.35rem;
 }
 
 .mood-btn {
-  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--moss) 50%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: #f6d7c4;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: #e4f0da;
   font-family: var(--font-mono);
   font-size: 0.82rem;
   font-weight: 500;
@@ -447,53 +368,79 @@ body {
 }
 
 .mood-btn:hover {
-  background: color-mix(in srgb, var(--accent) 32%, transparent);
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
 }
 
 .mood-btn:active {
   transform: translateY(1px);
 }
 
-.coach {
-  max-width: 34rem;
-  animation: rise 1s ease 0.15s both;
+.guide {
+  max-width: 32rem;
+  animation: rise 1s ease 0.12s both;
 }
 
-.coach h2 {
-  margin: 0 0 0.85rem;
+.guide h2 {
+  margin: 0 0 0.55rem;
   font-family: var(--font-display);
-  font-size: 1.8rem;
-  color: var(--paper);
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #f2f6ee;
 }
 
-.coach ol {
+.guide__lead {
+  margin: 0 0 1rem;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--sand) 80%, transparent);
+}
+
+.guide ol {
   margin: 0;
-  padding-left: 1.2rem;
+  padding-left: 1.15rem;
   line-height: 1.55;
-  color: color-mix(in srgb, var(--sand) 88%, white);
+  color: color-mix(in srgb, var(--sand) 90%, white);
 }
 
-.coach li + li {
-  margin-top: 0.45rem;
+.guide li + li {
+  margin-top: 0.4rem;
 }
 
-.coach code {
+.guide code {
   font-family: var(--font-mono);
   font-size: 0.9em;
-  color: #d7ecb8;
+  color: #c5dfb0;
 }
 
-.coach__note,
-.coach__status {
-  margin-top: 1.1rem;
-  line-height: 1.5;
-  color: color-mix(in srgb, var(--sand) 72%, transparent);
+.watch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid color-mix(in srgb, var(--sand) 16%, transparent);
 }
 
-.coach__status {
+.watch a {
+  color: color-mix(in srgb, var(--moss) 85%, white);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--moss) 40%, transparent);
+  padding-bottom: 0.1rem;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.watch a:hover {
+  color: #f2f6ee;
+  border-color: color-mix(in srgb, var(--sand) 55%, transparent);
+}
+
+.guide__status {
+  margin-top: 1.15rem;
   font-family: var(--font-mono);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--moss);
+  line-height: 1.45;
 }
 
 .hidden {

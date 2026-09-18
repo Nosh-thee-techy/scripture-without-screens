@@ -26,17 +26,18 @@ Reading plans use YouVersion-style **topic filters** (Hope, Sadness, Wealth,
 Strength, Peace, Anxiety). Platform v1 has no plans API, so catalogs are local;
 each day’s verse text is still live from YouVersion in your saved language.
 
-## Judge demo (90 seconds)
+## Try it locally
 
 With uvicorn running, open [http://127.0.0.1:8000/](http://127.0.0.1:8000/).
 
-1. **USSD tab** → **Call** → first time: pick a language.
+1. **USSD** → **Call** → first time: pick a language.
 2. Main menu → `3` Kids Corner → age → story → Got it / Explain simpler → quiz.
 3. Nested menus: `8` Change Language, `0` Home.
-4. **SMS tab** → mood buttons preview reflections (`/demo/sms`).
+4. **SMS** → mood buttons preview reflections (`/demo/sms`).
 5. Optional live: dial `*384*51567#` on a real phone via ngrok.
 
-Farmers and kids still use a real handset. Judges see the feature-phone UI.
+The on-screen handset talks to the same `POST /ussd` and SMS preview endpoints
+subscribers use in production.
 
 ## Requirements
 
@@ -58,7 +59,7 @@ Yes — for live content. Put them in `.env` (from `.env.example`). Never commit
 | `YOUVERSION_API_KEY` | Verse text, languages, versions | USSD/SMS show “unavailable” |
 | `FEATHERLESS_API_KEY` (preferred) or Gloo | SMS reflections + Kids simplify/translate | Falls back toward verse-only / plain kids text |
 | `FEATHERLESS_GEMMA_MODEL` + `OLLAMA_*` | Kids AI cascade steps 2–3 | Skips to next backend / plain fallback |
-| `AT_API_KEY` + `AT_USERNAME` | Sending SMS; live AT webhooks | SMS webhook returns `BAD`; USSD still testable via curl / demo UI |
+| `AT_API_KEY` + `AT_USERNAME` | Sending SMS; live AT webhooks | SMS webhook returns `BAD`; USSD still testable via curl / preview UI |
 | `ELEVENLABS_API_KEY` + `PUBLIC_BASE_URL` | Natural TTS on voice calls | Voice falls back to AT `Say` |
 | `REDIS_URL` | Remember language / version / plan across dials | In-memory fallback (lost on restart) |
 | `WHATSAPP_ACCESS_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID` | Meta WhatsApp Cloud API (test number OK) | `/whatsapp/*` ignored / send fails |
@@ -74,7 +75,7 @@ Yes — for live content. Put them in `.env` (from `.env.example`). Never commit
 5. For WhatsApp, point Meta’s callback at the same ngrok host + `/whatsapp/webhook`.
 
 YouVersion: https://developers.youversion.com — create an app key, then accept
-licenses for English, Swahili, Kalenjin, etc.
+licenses for English, Swahili, Kikuyu, Dholuo, Borana, etc.
 
 Featherless: https://featherless.ai — prefer an ungated model such as
 `Qwen/Qwen2.5-7B-Instruct` (Meta-Llama is often gated).
@@ -135,12 +136,12 @@ python -m uvicorn app.main:app --reload --port 8000
 
 Useful local URLs:
 
-- Demo UI: `http://127.0.0.1:8000/`
+- Preview UI: `http://127.0.0.1:8000/`
 - Health: `http://127.0.0.1:8000/health`
 - Docs: `http://127.0.0.1:8000/docs`
 - Webhooks: `/ussd`, `/sms`, `/voice`, `/whatsapp/webhook`
 - WhatsApp status: `GET /whatsapp/status`
-- Judge SMS preview: `POST /demo/sms`
+- SMS preview (no credits): `POST /demo/sms`
 
 ## Expose webhooks with ngrok
 

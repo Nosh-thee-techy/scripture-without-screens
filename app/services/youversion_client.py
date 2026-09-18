@@ -34,17 +34,20 @@ class YouVersionUnsupportedError(YouVersionError):
     """Raised when the public Platform API does not expose requested content."""
 
 
-# Labels shown on USSD menus; codes are BCP 47 ranges for /v1/bibles.
+# Labels shown on USSD menus; codes match YouVersion ``/v1/languages`` ids
+# (BCP 47 ranges for ``/v1/bibles?language_ranges[]=``).
+# Verified against Platform API with ``country=KE`` + ``bibles_available``:
+# en/sw/ki/luo return licensed versions; kln/kam/guz/mer/mas appear in the KE
+# language list but ``/v1/bibles`` returns 204 until those licenses are accepted
+# in the YouVersion developer portal — do not add them to this menu until then.
 # To add a language: append one ``(code, "English label")`` row here, and
-# (only if needed) one alias line in ``LANGUAGE_ALIASES`` below. Nothing else
-# in this module needs to change — ``list_bibles`` / ``_get_bible_id`` already
-# take any language string and query YouVersion dynamically.
+# (only if needed) one alias line in ``LANGUAGE_ALIASES`` below.
 SUPPORTED_LANGUAGES: list[tuple[str, str]] = [
     ("en", "English"),
     ("sw", "Swahili"),
-    ("kln", "Kalenjin"),
     ("ki", "Kikuyu"),
     ("luo", "Dholuo"),
+    ("gax", "Borana"),  # Oromo, Borana-Arsi-Guji — licensed on this app key
 ]
 
 # Alternate ISO / YouVersion codes → canonical menu code from SUPPORTED_LANGUAGES.
@@ -52,10 +55,10 @@ LANGUAGE_ALIASES: dict[str, str] = {
     "eng": "en",
     "swa": "sw",
     "swh": "sw",
-    "kal": "kln",
     "kik": "ki",
-    # "luo" is already the canonical code; listed for clarity only.
     "luo": "luo",
+    "orm": "gax",
+    "borana": "gax",
 }
 
 
@@ -157,6 +160,12 @@ def _request_json(path: str, params: dict[str, Any] | None = None) -> dict[str, 
         raise YouVersionError("Could not connect to YouVersion.") from exc
 
     if response.status_code == 404:
+        raise YouVersionNotFoundError(
+            "YouVersion could not find the requested content."
+        )
+    # Platform returns 204 with an empty body when a language has no licensed
+    # Bible versions for this app key (common for KE codes like kln/kam).
+    if response.status_code == 204 or not response.content:
         raise YouVersionNotFoundError(
             "YouVersion could not find the requested content."
         )

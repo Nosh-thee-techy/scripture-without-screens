@@ -14,6 +14,7 @@ LANGUAGE_NATIVE_LABELS: dict[str, str] = {
     "kln": "Kalenjin",
     "ki": "Gĩkũyũ",
     "luo": "Dholuo",
+    "gax": "Borana",
 }
 
 
@@ -532,7 +533,15 @@ def normalize_lang(language: str | None) -> str:
     """Map a session language code onto a supported i18n table."""
 
     code = (language or "en").strip().lower()
-    aliases = {"swh": "sw", "swa": "sw", "eng": "en", "kik": "ki", "kal": "kln"}
+    aliases = {
+        "swh": "sw",
+        "swa": "sw",
+        "eng": "en",
+        "kik": "ki",
+        "kal": "kln",
+        "orm": "gax",
+        "borana": "gax",
+    }
     code = aliases.get(code, code)
     return code if code in STRINGS else "en"
 
