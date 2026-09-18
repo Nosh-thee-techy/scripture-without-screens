@@ -1,16 +1,22 @@
 """Redis-backed preferences for feature-phone users.
 
-Each subscriber is keyed by phone number so language, Bible version, and
-reading-plan progress survive across USSD dials, SMS messages, and voice calls.
+Each subscriber is keyed by a SHA-256 hash of their phone number so language,
+Bible version, and reading-plan progress survive across USSD dials, SMS, and
+voice calls — without storing raw MSISDNs as Redis key material. YouVersion /
+partners can see aggregate usage without exposing phone numbers if the Redis
+store were ever compromised or shared.
+
 If Redis is unavailable, an in-process dictionary is used so local demos still
 work; restart the app and those preferences are lost.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import threading
+from datetime import datetime, timezone
 from typing import Any
 
 from app.config import REDIS_URL, SESSION_TTL_SECONDS
@@ -84,17 +90,38 @@ def _get_redis() -> Any | None:
     return _redis_client
 
 
-def _session_key(phone_number: str) -> str:
-    """Build the Redis key for one subscriber.
+def _hash_phone(phone_number: str) -> str:
+    """Return a SHA-256 hex digest of a cleaned phone number.
+
+    Privacy: Redis keys and shared analytics must never use raw MSISDNs at
+    rest. Hashing keeps stable unique-user identity for aggregate counts
+    without exposing the dialable number if the store is compromised or
+    handed to partners.
 
     Args:
-        phone_number: International phone number from Africa's Talking.
+        phone_number: International MSISDN, for example ``"+2547..."``.
 
     Returns:
-        A namespaced Redis key string.
+        Lowercase hex SHA-256 digest of the stripped phone string.
     """
 
-    return f"{SESSION_KEY_PREFIX}{phone_number.strip()}"
+    cleaned = phone_number.strip()
+    return hashlib.sha256(cleaned.encode("utf-8")).hexdigest()
+
+
+def _session_key(phone_number: str) -> str:
+    """Build the Redis key for one subscriber using a hashed MSISDN.
+
+    Args:
+        phone_number: International phone number from Africa's Talking /
+            WhatsApp (raw; never written into the key itself).
+
+    Returns:
+        A namespaced Redis key string whose suffix is ``_hash_phone(...)``.
+    """
+
+    # Hash so raw phones are not visible as key names in Redis SCAN output.
+    return f"{SESSION_KEY_PREFIX}{_hash_phone(phone_number)}"
 
 
 def _default_session() -> dict[str, Any]:
@@ -127,7 +154,17 @@ def _default_session() -> dict[str, Any]:
         "read_verse": 1,
         "read_book_page": 0,
         "read_chapter_page": 0,
+        # Raw MSISDN lives only inside the JSON payload (for outbound SMS),
+        # never as the Redis key. See ``_hash_phone``.
+        "phone_number": None,
+        "last_active_at": None,
     }
+
+
+def _utc_now_iso() -> str:
+    """Return the current UTC time as an ISO-8601 string."""
+
+    return datetime.now(timezone.utc).isoformat()
 
 
 def get_user_session(phone_number: str) -> dict[str, Any]:
@@ -164,22 +201,31 @@ def get_user_session(phone_number: str) -> dict[str, Any]:
 def save_user_session(phone_number: str, session: dict[str, Any]) -> None:
     """Persist a subscriber's preferences.
 
+    Always embeds the raw ``phone_number`` inside the JSON payload so SMS /
+    analytics jobs can recover the dialable MSISDN after Redis keys became
+    irreversible hashes.
+
     Args:
         phone_number: Subscriber MSISDN.
         session: Preference document to store.
     """
 
     key = _session_key(phone_number)
-    payload = json.dumps(session)
+    session["phone_number"] = phone_number.strip()
+    to_store = dict(session)
+    payload = json.dumps(to_store)
     client = _get_redis()
 
     if client is not None:
         client.set(key, payload, ex=SESSION_TTL_SECONDS)
-    _memory_sessions[key] = dict(session)
+    _memory_sessions[key] = dict(to_store)
 
 
 def update_user_session(phone_number: str, **fields: Any) -> dict[str, Any]:
     """Merge fields into a user's session and save the result.
+
+    Touches ``last_active_at`` on every call so analytics can count recent
+    users without a separate activity log.
 
     Args:
         phone_number: Subscriber MSISDN.
@@ -192,6 +238,7 @@ def update_user_session(phone_number: str, **fields: Any) -> dict[str, Any]:
 
     session = get_user_session(phone_number)
     session.update(fields)
+    session["last_active_at"] = _utc_now_iso()
     save_user_session(phone_number, session)
     return session
 
@@ -210,13 +257,15 @@ def clear_user_session(phone_number: str) -> None:
     _memory_sessions.pop(key, None)
 
 
-def list_daily_sms_subscribers() -> list[tuple[str, dict[str, Any]]]:
-    """Return ``(phone, session)`` pairs opted into daily SMS.
+def _iter_session_payloads() -> list[dict[str, Any]]:
+    """Load every stored session document from Redis or memory.
 
-    Scans Redis when available, otherwise the in-memory demo store.
+    Returns:
+        Merged session dicts (defaults applied). Empty list when nothing is
+        stored or Redis scan fails.
     """
 
-    results: list[tuple[str, dict[str, Any]]] = []
+    results: list[dict[str, Any]] = []
     client = _get_redis()
     if client is not None:
         try:
@@ -230,25 +279,51 @@ def list_daily_sms_subscribers() -> list[tuple[str, dict[str, Any]]]:
                     continue
                 if not isinstance(payload, dict):
                     continue
-                if not payload.get("language_set"):
-                    continue
-                if payload.get("sms_daily", True) is False:
-                    continue
-                phone = str(key).removeprefix(SESSION_KEY_PREFIX)
                 merged = _default_session()
                 merged.update(payload)
-                results.append((phone, merged))
+                results.append(merged)
             return results
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Redis scan for SMS subscribers failed: %s", exc)
+            logger.warning("Redis scan for sessions failed: %s", exc)
 
-    for key, payload in _memory_sessions.items():
+    for payload in _memory_sessions.values():
+        merged = _default_session()
+        merged.update(payload)
+        results.append(merged)
+    return results
+
+
+def list_all_sessions() -> list[dict[str, Any]]:
+    """Return every stored session document for analytics.
+
+    Follows the same Redis / memory scan pattern as
+    ``list_daily_sms_subscribers`` but does not filter by SMS opt-in.
+
+    Returns:
+        A list of session dictionaries (may include ``phone_number``).
+    """
+
+    return _iter_session_payloads()
+
+
+def list_daily_sms_subscribers() -> list[tuple[str, dict[str, Any]]]:
+    """Return ``(phone, session)`` pairs opted into daily SMS.
+
+    Phone numbers are read from the session JSON ``phone_number`` field
+    because Redis keys are hashed and no longer reversible.
+    """
+
+    results: list[tuple[str, dict[str, Any]]] = []
+    for payload in _iter_session_payloads():
         if not payload.get("language_set"):
             continue
         if payload.get("sms_daily", True) is False:
             continue
-        phone = key.removeprefix(SESSION_KEY_PREFIX)
-        results.append((phone, dict(payload)))
+        phone = payload.get("phone_number")
+        if not isinstance(phone, str) or not phone.strip():
+            # Legacy rows without an embedded MSISDN cannot receive SMS.
+            continue
+        results.append((phone.strip(), dict(payload)))
     return results
 
 

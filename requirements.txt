@@ -1,4 +1,5 @@
 africastalking
+apscheduler
 fastapi
 httpx
 pytest

@@ -35,6 +35,10 @@ class YouVersionUnsupportedError(YouVersionError):
 
 
 # Labels shown on USSD menus; codes are BCP 47 ranges for /v1/bibles.
+# To add a language: append one ``(code, "English label")`` row here, and
+# (only if needed) one alias line in ``LANGUAGE_ALIASES`` below. Nothing else
+# in this module needs to change — ``list_bibles`` / ``_get_bible_id`` already
+# take any language string and query YouVersion dynamically.
 SUPPORTED_LANGUAGES: list[tuple[str, str]] = [
     ("en", "English"),
     ("sw", "Swahili"),
@@ -43,27 +47,30 @@ SUPPORTED_LANGUAGES: list[tuple[str, str]] = [
     ("luo", "Dholuo"),
 ]
 
+# Alternate ISO / YouVersion codes → canonical menu code from SUPPORTED_LANGUAGES.
+LANGUAGE_ALIASES: dict[str, str] = {
+    "eng": "en",
+    "swa": "sw",
+    "swh": "sw",
+    "kal": "kln",
+    "kik": "ki",
+    # "luo" is already the canonical code; listed for clarity only.
+    "luo": "luo",
+}
+
 
 def _normalise_language(language: str) -> str:
-    """Convert a supported language code to the BCP 47 form used by YouVersion.
+    """Convert a language code to the BCP 47 form used by YouVersion.
 
     Args:
         language: An ISO 639 language code, such as ``"eng"`` or ``"en"``.
 
     Returns:
-        A BCP 47-compatible language range.
+        A BCP 47-compatible language range (canonical menu code when known).
     """
 
-    aliases = {
-        "eng": "en",
-        "swa": "sw",
-        "swh": "sw",
-        "kal": "kln",
-        "kik": "ki",
-        "luo": "luo",
-    }
     cleaned_language = language.strip().lower()
-    return aliases.get(cleaned_language, cleaned_language)
+    return LANGUAGE_ALIASES.get(cleaned_language, cleaned_language)
 
 
 def _cache_get(store: dict[Any, tuple[float, Any]], key: Any) -> Any | None:

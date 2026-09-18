@@ -97,6 +97,13 @@ SESSION_TTL_SECONDS = int(
 # Optional secret for POST /jobs/daily-sms (cron / scheduler).
 DAILY_SMS_JOB_SECRET = _env("DAILY_SMS_JOB_SECRET")
 
+# Hour (0-23 UTC) when the in-process daily SMS scheduler fires.
+# Default 05 ≈ early morning East Africa Time (UTC+3).
+DAILY_SMS_HOUR_UTC = int(_env("DAILY_SMS_HOUR_UTC", "05") or "05")
+
+# Optional secret for GET /analytics/summary (X-Analytics-Secret header).
+ANALYTICS_SECRET = _env("ANALYTICS_SECRET")
+
 # Meta WhatsApp Cloud API (test number or production phone number).
 WHATSAPP_ACCESS_TOKEN = _env("WHATSAPP_ACCESS_TOKEN")
 WHATSAPP_PHONE_NUMBER_ID = _env("WHATSAPP_PHONE_NUMBER_ID")
